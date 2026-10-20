@@ -107,6 +107,156 @@ VOID XNotify(LPCWSTR pwszStringParam)
 }
 
 
+// FH2 diagnostic log. The Sunrise plugin already mounts its own folder as SR2:, so
+// this creates FH2Revival.log beside the plugin XEX. Open/write/close each time so
+// useful evidence survives even if an XNotify is missed or the game exits abruptly.
+// v0.9.0: release builds do not write FH2Revival.log unless the optional SR2:\FH2Synth.txt contains the word "log" (or "crashlog").
+BOOL g_FH2LogEnabled = FALSE;
+BOOL g_FH2Quiet = TRUE;   // v1.0: built-in default
+
+// v0.9.10: every FH2_Log call opens, appends to and closes the log file on the game's thread.  During an invite join the
+// probe hooks emit dozens of lines within milliseconds, and every console that went through invite state 8 -> 10/11 stopped
+// writing and froze.  'quiet' drops the high-volume families (matched on the format string, so no formatting cost) and keeps
+// the sign-in, invite-state, block, launch and error lines.
+static BOOL FH2_QuietDrops(const CHAR* fmt)
+{
+    // v0.9.12: PROVENANCE CALL lines are no longer dropped here (the flush skips only send/WSASend when quiet): they are the
+    // only record of the socket/connect/XNetConnect/sendto steps, because FH2_Log calls made on game threads are lost.
+    // v0.9.11: matched on the literal format string.  Drops the high-volume families; keeps PEER and the
+    // NET TRACE socket/connect/XNet lines (the connection steps), sign-in, invite-state, block and error lines.
+    static const CHAR* const prefixes[] =
+    {
+        "PROBE ", "ROADTRIP ", "v0.8.17 EVT", "PROVENANCE SETUP",
+        "SYNTH NET", "SYNTH ENUM", "SYNTH CREATE",
+        "v0.8.13 SOCK", "v0.8.12 NETSTATS", "v0.8.13 XNET STATUS",
+        "NET TRACE BUFFER", "NET TRACE: XamCreateEnumeratorHandle", "NET TRACE: XamEnumerate",
+        "NET TRACE: XGetOverlappedResult", "NET TRACE: async enumeration",
+        "v0.8.3 VT ", "v0.8.3 RTTI", "v0.8.3 AVAIL getter", "v0.8.19 TRACE ", "v0.8.22 cand", "v0.8.22 crashlog"
+    };
+    if (strncmp(fmt, "PROBE SETUP", 11) == 0)
+        return FALSE;
+    for (int i = 0; i < (int)(sizeof(prefixes) / sizeof(prefixes[0])); ++i)
+        if (strncmp(fmt, prefixes[i], strlen(prefixes[i])) == 0)
+            return TRUE;
+    return FALSE;
+}
+
+// v0.9.19: with the 'xgi' word in FH2Synth.txt all log lines go to ONE file family (FH2P2P.log, FH2P2P_2.log ...) and the start-up
+// boilerplate and the periodic P2P summary lines are dropped, so a test produces only a few small files per console.
+extern BOOL g_FH2Xgi;
+static BOOL FH2_TerseDrops(const CHAR* fmt)
+{
+    static const CHAR* const prefixes[] =
+    {
+        "PROBE SETUP", "v0.3.7 ", "v0.9.5 TRACE hooks", "Protected-file table", "Native server-down", "v0.8.3 availability",
+        "v0.8.2 PROVENANCE", "v0.8.10 config", "v0.8.16", "v0.8.5 SYNTH", "v0.8.5 XNetStartup", "v0.8.7 ", "v0.8.14 SOCK",
+        "v0.8.4 XAM", "v0.8.4 XAM PROBE", "v0.9.4 PEER TRACE", "v0.4.0 ", "v0.8.3 IDENTITY", "v0.8.3 ROADTRIP", "v0.8.3 Wireshark",
+        "v0.8.3 NETWORK", "v0.9.15 P2P RECV stats", "v0.9.15 P2P SEND to", "v0.9.15 P2P RECV from", "v0.9.9 SIGNINFO"
+    };
+    for (int i = 0; i < (int)(sizeof(prefixes) / sizeof(prefixes[0])); ++i)
+        if (strncmp(fmt, prefixes[i], strlen(prefixes[i])) == 0)
+            return TRUE;
+    return FALSE;
+}
+
+// v0.9.6: several threads log at once (the new 20 ms poller, hook threads, the worker). Without a lock two
+// writers could seek to the same end-of-file offset and overwrite each other (a corrupted line was seen in the
+// v0.9.5 baseline log). A tiny spin lock serialises the write; if it cannot be taken within ~200 ms (a stuck
+// writer) we write anyway rather than risk blocking the game.
+static volatile LONG g_FH2LogLock = 0;
+#define FH2_LOG_PART_BYTES 16000   // v0.9.19: was 8000 (v0.9.18)
+
+static VOID FH2_LogWrite(const CHAR* message, BOOL toP2P = FALSE)
+{
+    CHAR line[640] = { 0 };
+    BOOL haveLock = FALSE;
+    for (int spin = 0; spin < 200; ++spin)
+    {
+        if (InterlockedCompareExchange(&g_FH2LogLock, 1, 0) == 0) { haveLock = TRUE; break; }
+        Sleep(1);
+    }
+
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    sprintf_s(line, sizeof(line),
+        "[%04u-%02u-%02u %02u:%02u:%02u] %s\r\n",
+        st.wYear, st.wMonth, st.wDay,
+        st.wHour, st.wMinute, st.wSecond,
+        message);
+
+    // v0.9.18: split each log into parts of about 8 KB (FH2Revival.log, FH2Revival_2.log ...; FH2P2P.log, FH2P2P_2.log ...)
+    // because the tester's file copies are cut at a fixed size (9-23 KB seen).  Counts this run's bytes only.
+    static DWORD partBytes[2] = { 0, 0 };
+    static DWORD partNo[2] = { 1, 1 };
+    const int ti = toP2P ? 1 : 0;
+    const DWORD lineLen = (DWORD)strlen(line);
+    if (partBytes[ti] + lineLen > FH2_LOG_PART_BYTES && partBytes[ti] > 0) { ++partNo[ti]; partBytes[ti] = 0; }
+    partBytes[ti] += lineLen;
+    CHAR path[96];
+    if (partNo[ti] <= 1) sprintf_s(path, sizeof(path), "%s", toP2P ? PATH_FH2_P2PLOG : PATH_FH2_LOG);
+    else sprintf_s(path, sizeof(path), toP2P ? (MOUNT_POINT "\\FH2P2P_%u.log") : (MOUNT_POINT "\\FH2Revival_%u.log"), partNo[ti]);
+
+    HANDLE hFile = CreateFile(path,
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        if (haveLock) InterlockedExchange(&g_FH2LogLock, 0);
+        return;
+    }
+
+    SetFilePointer(hFile, 0, NULL, FILE_END);
+
+    DWORD written = 0;
+    WriteFile(hFile, line, (DWORD)strlen(line), &written, NULL);
+    CloseHandle(hFile);
+    if (haveLock) InterlockedExchange(&g_FH2LogLock, 0);
+}
+
+VOID FH2_Log(const CHAR* fmt, ...)
+{
+    if (!g_FH2LogEnabled)
+        return;
+    if (g_FH2Quiet && FH2_QuietDrops(fmt))
+        return;
+    if (g_FH2Xgi && FH2_TerseDrops(fmt))
+        return;
+
+    // v0.8.15: CreateFile(OPEN_ALWAYS) on an existing file sets last-error ERROR_ALREADY_EXISTS (183).
+    // Hooks call FH2_Log on the game's thread between the game's connect() and its WSAGetLastError(),
+    // so the game could see 183 instead of WSAEWOULDBLOCK (10035) and close the socket at once.
+    // Preserve both the Win32 and the XNet last-error across the log call.
+    DWORD savedLastError = GetLastError();
+    int savedWsaError = NetDll_WSAGetLastError();
+
+    CHAR message[512] = { 0 };
+    va_list args;
+    va_start(args, fmt);
+    vsprintf_s(message, sizeof(message), fmt, args);
+    va_end(args);
+
+    // v0.9.15: peer-traffic lines go to their own small file (FH2P2P.log) so a capped copy of FH2Revival.log cannot hide them;
+    // join/select markers are written to both files so the P2P file has the timeline.
+    // v0.9.16: "v0.9.16 XGI" session-call lines and the XamSession lines (v0.4.3 SESSION) also go to the P2P file.
+    if (g_FH2Xgi || strncmp(fmt, "v0.9.15 P2P", 11) == 0 || strncmp(fmt, "v0.9.16 XGI", 11) == 0)
+        FH2_LogWrite(message, TRUE);   // v0.9.19: with 'xgi' everything goes to the one FH2P2P family
+    else
+    {
+        FH2_LogWrite(message);
+        if (strncmp(fmt, "PROVENANCE MARKER", 17) == 0 || strncmp(fmt, "PROVENANCE CALL", 15) == 0)
+            FH2_LogWrite(message, TRUE);
+    }
+
+    SetLastError(savedLastError);
+    NetDll_WSASetLastError(savedWsaError);
+}
+
+
 char SunriseFullPath[MAX_PATH];
 DWORD MountPath(PCHAR Drive, PCHAR Device)
 {

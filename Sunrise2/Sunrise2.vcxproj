@@ -42,6 +42,7 @@
     <ProjectName>Sunrise2</ProjectName>
     <ProjectGuid>{652C7D60-BC02-4E09-96DD-930012345679}</ProjectGuid>
     <RootNamespace>Sunrise2</RootNamespace>
+    <TargetName>FH2Revival</TargetName>
     <Keyword>Win32Proj</Keyword>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -109,28 +110,32 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
+    <TargetName>FH2Revival</TargetName>
+    <ImageXexOutput>$(OutDir)FH2Revival.xex</ImageXexOutput>
+  </PropertyGroup>
+  <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">Debug\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">Debug\</IntDir>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">true</LinkIncremental>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='Debug|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CodeAnalysis\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">CodeAnalysis\</IntDir>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">true</LinkIncremental>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='CodeAnalysis|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">Profile\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">Profile\</IntDir>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='Profile|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">Profile_FastCap\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">Profile_FastCap\</IntDir>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='Profile_FastCap|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Release\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">Release\</IntDir>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='Release|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">Release_LTCG\</OutDir>
     <OutDir Condition="'$(Configuration)|$(Platform)'=='Rel-Obf|Xbox 360'">Rel-Obf\</OutDir>
@@ -140,10 +145,10 @@
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Rel-Obf|Xbox 360'">Rel-Obf\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='NO_OPTIM|Xbox 360'">Release_LTCG\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Obfused|Xbox 360'">Obfused\</IntDir>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Rel-Obf|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='NO_OPTIM|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
-    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Obfused|Xbox 360'">$(OutDir)$(ProjectName).dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Rel-Obf|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='NO_OPTIM|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
+    <OutputFile Condition="'$(Configuration)|$(Platform)'=='Obfused|Xbox 360'">$(OutDir)FH2Revival.dll</OutputFile>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='Release_LTCG|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='Rel-Obf|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
     <RemoteRoot Condition="'$(Configuration)|$(Platform)'=='NO_OPTIM|Xbox 360'">xe:\Samples\DynamicLinkLibrary</RemoteRoot>
@@ -209,7 +214,7 @@
       <AdditionalOptions>/dll /entry:"_DllMainCRTStartup" /include:"XboxKrnlBuildNumber" %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>libcmt.lib;d3d9d.lib;d3dx9d.lib;xgraphicsd.lib;xapilibd.lib;xaudiod2.lib;x3daudiod.lib;xmcored.lib;xboxkrnl.lib;xbdm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
       <AdditionalOptions>/dll /ALIGN:128,4096 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>..\xkelib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -227,6 +232,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>xex.xml</ConfigurationFile>
       <AdditionalSections>
       </AdditionalSections>
@@ -264,7 +270,7 @@
       <AdditionalOptions>/dll /entry:"_DllMainCRTStartup" /include:"XboxKrnlBuildNumber" %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>libcmt.lib;d3d9d.lib;d3dx9d.lib;xgraphicsd.lib;xapilibd.lib;xaudiod2.lib;x3daudiod.lib;xmcored.lib;xboxkrnl.lib;xbdm.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
     </Link>
     <PreBuildEvent>
@@ -276,6 +282,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>
       </ConfigurationFile>
       <AdditionalSections>
@@ -318,7 +325,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
     </Link>
     <PreBuildEvent>
@@ -330,6 +337,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>
       </ConfigurationFile>
       <AdditionalSections>
@@ -371,7 +379,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>false</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
     </Link>
     <PreBuildEvent>
@@ -383,6 +391,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>
       </ConfigurationFile>
       <AdditionalSections>
@@ -406,7 +415,7 @@
       <OpenMPSupport>FALSE</OpenMPSupport>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <ExceptionHandling>false</ExceptionHandling>
-      <AdditionalIncludeDirectories>..\Common;Common;..\..\..\Modules;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\xkelib;..\Common;Common;..\..\..\Modules;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/MP %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>NDEBUG;_XBOX;XBOX;XBOX_SAMPLE;_XBOX_CRT_DEPRECATE_INSECURE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
@@ -417,14 +426,15 @@
       <AnalyzeStalls>false</AnalyzeStalls>
     </ClCompile>
     <Link>
-      <AdditionalOptions>/ignore:4089 /dll /entry:"_DllMainCRTStartup" /include:"XboxKrnlBuildNumber" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/ignore:4089 /dll /entry:"_DllMainCRTStartup" /include:"XboxKrnlBuildNumber" /ALIGN:128,4096 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies>libcmt.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xapilib.lib;xaudio2.lib;x3daudio.lib;xmcore.lib;xboxkrnl.lib;xbdm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\xkelib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
-      <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
+      <ModuleDefinitionFile></ModuleDefinitionFile>
     </Link>
     <PreBuildEvent>
       <Command>
@@ -435,8 +445,8 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
-      <ConfigurationFile>
-      </ConfigurationFile>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
+      <ConfigurationFile>xex.xml</ConfigurationFile>
       <AdditionalSections>
       </AdditionalSections>
     </ImageXex>
@@ -478,7 +488,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
       <AdditionalOptions>/dll /ALIGN:128,4096 %(AdditionalOptions)</AdditionalOptions>
@@ -494,6 +504,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>xex.xml</ConfigurationFile>
       <AdditionalSections>
       </AdditionalSections>
@@ -537,7 +548,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
       <AdditionalOptions>/dll /ALIGN:128,4096 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>..\xkelib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -550,9 +561,12 @@
     <PostBuildEvent>
       <Command>"$(ProjectDir)xextool.exe" -e u -c b -o "$(ImageXexOutput)"_base "$(ImageXexOutput)"
 "$(ProjectDir)XexSectionDump.exe" "$(ImageXexOutput)"_base "$(OutDir)xbls_txt.bin"
-"$(ProjectDir)xextool.exe" -m r -e u -c u "$(ImageXexOutput)"</Command>
+"$(ProjectDir)xextool.exe" -m r -e u -c u "$(ImageXexOutput)"
+copy /Y "$(ImageXexOutput)" "$(OutDir)FH2Revival.xex" &gt;nul 2&gt;&amp;1
+exit 0</Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>xex.xml</ConfigurationFile>
       <AdditionalSections>
       </AdditionalSections>
@@ -597,7 +611,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
       <AdditionalOptions>/dll /ALIGN:128,4096 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>..\xkelib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -613,6 +627,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>xex.xml</ConfigurationFile>
       <AdditionalSections>
       </AdditionalSections>
@@ -656,7 +671,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <OutputFile>$(OutDir)$(ProjectName).dll</OutputFile>
+      <OutputFile>$(OutDir)FH2Revival.dll</OutputFile>
       <ModuleDefinitionFile>Sunrise2.def</ModuleDefinitionFile>
       <AdditionalOptions>/dll /ALIGN:128,4096 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>..\xkelib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -671,6 +686,7 @@
       </Command>
     </PostBuildEvent>
     <ImageXex>
+      <OutputFile>$(OutDir)FH2Revival.xex</OutputFile>
       <ConfigurationFile>xex.xml</ConfigurationFile>
       <AdditionalSections>
       </AdditionalSections>

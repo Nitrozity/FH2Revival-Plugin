@@ -7,5 +7,6 @@
 extern BOOL bIsDevkit;
 extern BOOL bAllowRetailPlayers;
 extern BOOL bIgnoreTrueskill;
+extern BOOL bRunContinuous;
 
 #endif

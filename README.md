@@ -1,4 +1,4 @@
-# FH2Revival
+# FH2Revival v1.0.48
 
 FH2Revival is a community project that restores Online Road Trip functionality to Forza Horizon 2 on Xbox 360.
 

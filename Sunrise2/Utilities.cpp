@@ -110,7 +110,7 @@ VOID XNotify(LPCWSTR pwszStringParam)
 // FH2 diagnostic log. The Sunrise plugin already mounts its own folder as SR2:, so
 // this creates FH2Revival.log beside the plugin XEX. Open/write/close each time so
 // useful evidence survives even if an XNotify is missed or the game exits abruptly.
-// v0.9.0: release builds do not write FH2Revival.log unless the optional SR2:\FH2Synth.txt contains the word "log" (or "crashlog").
+// v0.9.0: release builds do not write FH2Revival.log unless the optional FH2Revival.ini contains the word "log" (or "crashlog").
 BOOL g_FH2LogEnabled = FALSE;
 BOOL g_FH2Quiet = TRUE;   // v1.0: built-in default
 
@@ -166,9 +166,21 @@ static BOOL FH2_TerseDrops(const CHAR* fmt)
 static volatile LONG g_FH2LogLock = 0;
 #define FH2_LOG_PART_BYTES 16000   // v0.9.19: was 8000 (v0.9.18)
 
-static VOID FH2_LogWrite(const CHAR* message, BOOL toP2P = FALSE)
+// v1.0.19: lines are queued by any thread and written by the poll thread (FH2_LogFlush), which retries a line that cannot be opened
+// instead of dropping it.  v1.0.18 lost up to 14 lines at a time (file busy) and one of them was most likely the error dialog.
+#define FH2_LOGQ_N   320   // v1.0.23: was 192 (the queue now also buffers the lines of a whole invite join)
+#define FH2_LOGQ_LEN 576
+struct FH2LogQSlot { volatile LONG ready; LONG toP2P; CHAR text[FH2_LOGQ_LEN]; };
+static FH2LogQSlot g_FH2LogQ[FH2_LOGQ_N];
+static volatile LONG g_FH2LogQHead = 0;      // next slot to hand out (any thread)
+static volatile LONG g_FH2LogQTail = 0;      // next slot to write (flusher only)
+static volatile LONG g_FH2LogQDropped = 0;   // lines refused because the queue was full
+static volatile LONG g_FH2LogQOn = 0;        // set once the flusher thread runs
+volatile LONG g_FH2LogHold = 0;              // v1.0.23
+
+// Writes one finished line to the right part file.  Returns FALSE when the file could not be opened (caller retries later).
+static BOOL FH2_LogWriteLine(const CHAR* line, BOOL toP2P)
 {
-    CHAR line[640] = { 0 };
     BOOL haveLock = FALSE;
     for (int spin = 0; spin < 200; ++spin)
     {
@@ -176,6 +188,60 @@ static VOID FH2_LogWrite(const CHAR* message, BOOL toP2P = FALSE)
         Sleep(1);
     }
 
+    // v0.9.18: split each log into parts (FH2Revival.log, FH2Revival_2.log ...; FH2P2P.log, FH2P2P_2.log ...).  Counts this run's bytes only.
+    static DWORD partBytes[2] = { 0, 0 };
+    static DWORD partNo[2] = { 1, 1 };
+    const int ti = toP2P ? 1 : 0;
+    const DWORD lineLen = (DWORD)strlen(line);
+    DWORD useNo = partNo[ti], useBytes = partBytes[ti];
+    if (useBytes + lineLen > FH2_LOG_PART_BYTES && useBytes > 0) { ++useNo; useBytes = 0; }
+    CHAR path[96];
+    if (useNo <= 1) sprintf_s(path, sizeof(path), "%s", toP2P ? PATH_FH2_P2PLOG : PATH_FH2_LOG);
+    else sprintf_s(path, sizeof(path), toP2P ? (MOUNT_POINT "\\FH2P2P_%u.log") : (MOUNT_POINT "\\FH2Revival_%u.log"), useNo);
+
+    HANDLE hFile = CreateFile(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        if (haveLock) InterlockedExchange(&g_FH2LogLock, 0);
+        return FALSE;
+    }
+    SetFilePointer(hFile, 0, NULL, FILE_END);
+    DWORD written = 0;
+    WriteFile(hFile, line, lineLen, &written, NULL);
+    CloseHandle(hFile);
+    partNo[ti] = useNo;
+    partBytes[ti] = useBytes + lineLen;
+    if (haveLock) InterlockedExchange(&g_FH2LogLock, 0);
+    return TRUE;
+}
+
+// Called from the poll thread every 20 ms.
+VOID FH2_LogFlush()
+{
+    InterlockedExchange(&g_FH2LogQOn, 1);
+    if (g_FH2LogHold) return;   // v1.0.23: lines stay queued; no file is opened while an invite join runs
+    for (int budget = 0; budget < 48; ++budget)
+    {
+        LONG tail = g_FH2LogQTail;
+        if (tail == g_FH2LogQHead) break;                       // empty
+        FH2LogQSlot* s = &g_FH2LogQ[(DWORD)tail % FH2_LOGQ_N];
+        if (!s->ready) break;                                   // the writer is still filling this slot
+        if (!FH2_LogWriteLine(s->text, s->toP2P ? TRUE : FALSE)) break;   // file busy: keep the line, try again next poll
+        s->ready = 0;
+        g_FH2LogQTail = tail + 1;
+    }
+    LONG d = g_FH2LogQDropped;
+    if (d)
+    {
+        CHAR note[96];
+        sprintf_s(note, sizeof(note), "[log] %d lines were refused (queue full)\r\n", d);
+        if (FH2_LogWriteLine(note, TRUE)) InterlockedExchangeAdd(&g_FH2LogQDropped, -d);
+    }
+}
+
+static VOID FH2_LogWrite(const CHAR* message, BOOL toP2P = FALSE)
+{
+    CHAR line[640] = { 0 };
     SYSTEMTIME st;
     GetLocalTime(&st);
     sprintf_s(line, sizeof(line),
@@ -184,38 +250,24 @@ static VOID FH2_LogWrite(const CHAR* message, BOOL toP2P = FALSE)
         st.wHour, st.wMinute, st.wSecond,
         message);
 
-    // v0.9.18: split each log into parts of about 8 KB (FH2Revival.log, FH2Revival_2.log ...; FH2P2P.log, FH2P2P_2.log ...)
-    // because the tester's file copies are cut at a fixed size (9-23 KB seen).  Counts this run's bytes only.
-    static DWORD partBytes[2] = { 0, 0 };
-    static DWORD partNo[2] = { 1, 1 };
-    const int ti = toP2P ? 1 : 0;
-    const DWORD lineLen = (DWORD)strlen(line);
-    if (partBytes[ti] + lineLen > FH2_LOG_PART_BYTES && partBytes[ti] > 0) { ++partNo[ti]; partBytes[ti] = 0; }
-    partBytes[ti] += lineLen;
-    CHAR path[96];
-    if (partNo[ti] <= 1) sprintf_s(path, sizeof(path), "%s", toP2P ? PATH_FH2_P2PLOG : PATH_FH2_LOG);
-    else sprintf_s(path, sizeof(path), toP2P ? (MOUNT_POINT "\\FH2P2P_%u.log") : (MOUNT_POINT "\\FH2Revival_%u.log"), partNo[ti]);
-
-    HANDLE hFile = CreateFile(path,
-        GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL);
-
-    if (hFile == INVALID_HANDLE_VALUE)
+    if (!g_FH2LogQOn)
     {
-        if (haveLock) InterlockedExchange(&g_FH2LogLock, 0);
+        FH2_LogWriteLine(line, toP2P);    // before the poll thread runs: write at once
         return;
     }
-
-    SetFilePointer(hFile, 0, NULL, FILE_END);
-
-    DWORD written = 0;
-    WriteFile(hFile, line, (DWORD)strlen(line), &written, NULL);
-    CloseHandle(hFile);
-    if (haveLock) InterlockedExchange(&g_FH2LogLock, 0);
+    // Queue it.  The margin keeps several simultaneous writers from wrapping onto an unwritten slot.
+    if (g_FH2LogQHead - g_FH2LogQTail >= FH2_LOGQ_N - 16)
+    {
+        InterlockedIncrement(&g_FH2LogQDropped);
+        return;
+    }
+    LONG idx = InterlockedIncrement(&g_FH2LogQHead) - 1;
+    FH2LogQSlot* s = &g_FH2LogQ[(DWORD)idx % FH2_LOGQ_N];
+    strncpy(s->text, line, FH2_LOGQ_LEN - 1);
+    s->text[FH2_LOGQ_LEN - 1] = 0;
+    s->toP2P = toP2P ? 1 : 0;
+    __sync();
+    InterlockedExchange(&s->ready, 1);
 }
 
 VOID FH2_Log(const CHAR* fmt, ...)
@@ -272,7 +324,7 @@ DWORD MountPath(PCHAR Drive, PCHAR Device)
 PCHAR GetMountPath() {
 	std::wstring ws;
 	PLDR_DATA_TABLE_ENTRY TableEntry;
-	XexPcToFileHeader((PVOID)BASE_ADDR, &TableEntry);
+	XexPcToFileHeader((PVOID)&GetMountPath, &TableEntry);   // v1.0.48: our own module, whatever base address the project uses
 
 	ws = TableEntry->FullDllName.Buffer;
 	std::string FullDllName(ws.begin(), ws.end());
@@ -328,79 +380,3 @@ VOID Sunrise_Print(const CHAR* fmt, ...)
 #endif
 }
 
-#pragma region Sunrise2 ini
-// Use an app or site to convert ini to byte array - https://tomeko.net/online_tools/file_to_hex.php
-// Default ini with comments
-BYTE INIDATA[213] = {
-	0x5B, 0x4F, 0x50, 0x54, 0x49, 0x4F, 0x4E, 0x53, 0x5D, 0x0D, 0x0A, 0x3B, 0x20, 0x41, 0x6C, 0x6C,
-	0x6F, 0x77, 0x73, 0x20, 0x6D, 0x61, 0x74, 0x63, 0x68, 0x6D, 0x61, 0x6B, 0x69, 0x6E, 0x67, 0x20,
-	0x74, 0x6F, 0x20, 0x77, 0x6F, 0x72, 0x6B, 0x20, 0x77, 0x68, 0x65, 0x6E, 0x20, 0x74, 0x68, 0x65,
-	0x20, 0x6C, 0x65, 0x61, 0x64, 0x65, 0x72, 0x62, 0x6F, 0x61, 0x72, 0x64, 0x20, 0x41, 0x50, 0x49,
-	0x20, 0x69, 0x73, 0x20, 0x64, 0x6F, 0x77, 0x6E, 0x2F, 0x62, 0x72, 0x6F, 0x6B, 0x65, 0x6E, 0x0D,
-	0x0A, 0x3B, 0x20, 0x4F, 0x6E, 0x6C, 0x79, 0x20, 0x77, 0x6F, 0x72, 0x6B, 0x73, 0x20, 0x66, 0x6F,
-	0x72, 0x20, 0x6E, 0x6F, 0x6E, 0x2D, 0x72, 0x65, 0x74, 0x61, 0x69, 0x6C, 0x20, 0x70, 0x6C, 0x61,
-	0x79, 0x65, 0x72, 0x73, 0x0D, 0x0A, 0x49, 0x67, 0x6E, 0x6F, 0x72, 0x65, 0x54, 0x72, 0x75, 0x65,
-	0x73, 0x6B, 0x69, 0x6C, 0x6C, 0x20, 0x3D, 0x20, 0x66, 0x61, 0x6C, 0x73, 0x65, 0x0D, 0x0A, 0x3B,
-	0x20, 0x45, 0x6E, 0x61, 0x62, 0x6C, 0x65, 0x73, 0x20, 0x6D, 0x61, 0x74, 0x63, 0x68, 0x6D, 0x61,
-	0x6B, 0x69, 0x6E, 0x67, 0x20, 0x77, 0x69, 0x74, 0x68, 0x20, 0x52, 0x65, 0x74, 0x61, 0x69, 0x6C,
-	0x20, 0x70, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x73, 0x0D, 0x0A, 0x41, 0x6C, 0x6C, 0x6F, 0x77, 0x52,
-	0x65, 0x74, 0x61, 0x69, 0x6C, 0x50, 0x6C, 0x61, 0x79, 0x65, 0x72, 0x73, 0x20, 0x3D, 0x20, 0x74,
-	0x72, 0x75, 0x65, 0x0D, 0x0A
-};
-
-// Save changes to (use false) or generate new (use true) Sunrise2.ini
-VOID Writeini(BOOL GenerateNew)
-{
-	CSimpleIniA ini_Sunrise_W;
-	ini_Sunrise_W.Reset();
-	ini_Sunrise_W.SetSpaces(true);
-	if (GenerateNew) {
-		if (CWriteFile(PATH_INI, INIDATA, sizeof(INIDATA)) == TRUE)
-		{
-			Sunrise_Dbg("Sunrise2.ini created successfully!");
-			Readini();
-		}
-		else
-			Sunrise_Dbg("Failed to create Sunrise2.ini");
-
-	}
-	else {
-		if (!ini_Sunrise_W.LoadFile(PATH_INI)) {
-			ini_Sunrise_W.SetBoolValue("OPTIONS", "IgnoreTrueskill", bIgnoreTrueskill);
-			ini_Sunrise_W.SetBoolValue("OPTIONS", "AllowRetailPlayers", bAllowRetailPlayers);
-		}
-	}
-
-	if (!GenerateNew && !ini_Sunrise_W.SaveFile(PATH_INI))
-	{
-		//Sunrise_Dbg("Changes saved to Sunrise2.ini!");
-		ini_Sunrise_W.Reset();
-	}
-	else if (!GenerateNew)
-	{
-		Sunrise_Dbg("Failed to save changes to Sunrise2.ini!");
-	}
-}
-
-// Read ini values
-VOID Readini()
-{
-	Sunrise_Dbg("Reading values from Sunrise2.ini");
-	CSimpleIniA ini_Sunrise_R;
-	ini_Sunrise_R.Reset();
-	ini_Sunrise_R.SetSpaces(true);
-	if (!ini_Sunrise_R.LoadFile(PATH_INI)) {
-		
-		bIgnoreTrueskill = ini_Sunrise_R.GetBoolValue("OPTIONS", "IgnoreTrueskill", FALSE);
-		bAllowRetailPlayers = ini_Sunrise_R.GetBoolValue("OPTIONS", "AllowRetailPlayers", TRUE);
-		ini_Sunrise_R.Reset();
-
-
-		Writeini(FALSE); // This should ensure that any entries missing from the clients ini will be added with default value
-	}
-	else {
-		Sunrise_Dbg("Error reading Sunrise2.ini. Generating new ini...");
-		Writeini(TRUE);
-	}
-}
-#pragma endregion

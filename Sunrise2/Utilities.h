@@ -16,6 +16,8 @@ BOOL IsTrayOpen();
 VOID ThreadMe(LPTHREAD_START_ROUTINE lpStartAddress);
 VOID XNotify(LPCWSTR pwszStringParam);
 VOID FH2_Log(const CHAR* fmt, ...);
+VOID FH2_LogFlush();   // v1.0.19: writes queued log lines; called from the poll thread
+extern volatile LONG g_FH2LogHold;   // v1.0.23: 1 = the poll thread writes no log/heartbeat file while an invite is being processed
 
 DWORD MountPath(PCHAR Drive, PCHAR Device);
 PCHAR GetMountPath();
@@ -27,20 +29,16 @@ VOID Sunrise_Print(const CHAR* fmt, ...);
 #define DO_PRINTS // Comment out to disable prints
 
 #ifdef DO_PRINTS
-#define Sunrise_Dbg(x, ...) { do { Sunrise_Print("[Sunrise2] "  x "\n", __VA_ARGS__); } while(0); }
+#define Sunrise_Dbg(x, ...) { do { Sunrise_Print("[FH2Revival] "  x "\n", __VA_ARGS__); } while(0); }
 #else
 #define Sunrise_Dbg
 #endif
 
-#pragma region Sunrise2 ini
-#define BASE_ADDR 0x91A00000
-#define MOUNT_POINT	 "SR2:"
-#define PATH_INI	MOUNT_POINT "\\Sunrise2.ini"
+#pragma region FH2Revival paths
+#define MOUNT_POINT	 "FH2R:"
 #define PATH_FH2_LOG MOUNT_POINT "\\FH2Revival.log"
 #define PATH_FH2_P2PLOG MOUNT_POINT "\\FH2P2P.log"
 
-VOID Writeini(BOOL GenerateNew);
-VOID Readini();
 #pragma endregion
 
 #endif

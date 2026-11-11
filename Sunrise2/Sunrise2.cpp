@@ -1,23 +1,20 @@
 //-----------------------------------------------------------------------------
-//  FH2Revival (Forza Horizon 2 Online Road Trip revival), built on Sunrise 2.0
+//  FH2Revival (Forza Horizon 2 Online Road Trip revival).  FH2 only: since v1.0.48 it contains no Halo code and does nothing
+//  in any other title, so it can sit next to the Halo Sunrise plugin without the two touching the same game.
+//  Originally built on Sunrise 2.0.
 //
 //  Dev:
 //			Byrom
 // 
 //  Credits:
-//			craftycodie - Halo hooks and address
+//			craftycodie - Sunrise (plugin hooks / base project)
 //-----------------------------------------------------------------------------
 
 #include "stdafx.h"
 #include "CoreHooks.h"
 #include "Utilities.h"
 
-const char* SunriseVers = "2.1.0";
-
-in_addr sunrise_ip = { 174, 136, 231, 17 };
-INT sunrise_port = 8000;
-const char sunrise_description[XTITLE_SERVER_MAX_SERVER_INFO_LEN] = "required,mass_storage,other,ttl,usr,shr,web,dbg,upl,prs,std";
-
+const char* SunriseVers = "1.0.48";   // FH2Revival version (was the Sunrise 2.x number)
 
 HANDLE hXam;
 BOOL bRunContinuous = TRUE;
@@ -25,11 +22,6 @@ BOOL bLoopHasComplete = FALSE;
 BOOL bIsDevkit; // Set on plugin load. Skips doing xnotify on devkits
 DWORD LastTitleId;
 
-DWORD Halo3InternalBeta = 0x4D53883A;
-DWORD Halo3ExternalBeta = 0x4D53880C;
-DWORD Halo3 = 0x4D5307E6;
-DWORD Halo3ODST = 0x4D530877;
-DWORD HaloReach = 0x4D53085B;
 DWORD ForzaHorizon2 = 0x4D530AA4;
 
 
@@ -3255,7 +3247,7 @@ static VOID FH2_V083Tick(DWORD object, DWORD request)
 }
 
 
-// v0.8.3b: one-shot dump of the RUNNING (TU-patched) FH2 image to SR2:\FH2_image.bin
+// v0.8.3b: one-shot dump of the RUNNING (TU-patched) FH2 image to FH2_image.bin
 // so offline disassembly matches runtime addresses. Skipped if the file exists.
 // Runs from the title loop ~20 s after load (menu reached), takes a few seconds.
 static VOID FH2_V083DumpImageOnce()
@@ -3401,54 +3393,6 @@ static BOOL FH2_SetupRoadTripProvenanceProfiler(PLDR_DATA_TABLE_ENTRY module)
     return TRUE;
 }
 
-BOOL bAllowRetailPlayers = TRUE;
-BOOL bIgnoreTrueskill = FALSE;
-
-DWORD Halo3_Retail_XUserReadStats_Addr = 0x825B6358;
-DWORD Halo3_Epsilon_XUserReadStats_Addr = 0x826E77E8;
-
-
-VOID AllowRetailPlayers_HALO3_RETAIL()
-{
-	Sunrise_Dbg("Allowing Retail players");
-	// allow MM to start with offline peers
-	*((DWORD*)(0x822BA37C)) = 0x60000000;
-	// disable host migration before map/game variants are downloaded.
-	*((DWORD*)(0x824004BC)) = 0x60000000;
-	*((DWORD*)(0x824004C0)) = 0x60000000;
-	*((DWORD*)(0x824004C4)) = 0x60000000;
-	*((DWORD*)(0x824004C8)) = 0x60000000;
-	*((DWORD*)(0x824004CC)) = 0x60000000;
-	*((DWORD*)(0x824004D0)) = 0x60000000;
-	*((DWORD*)(0x824004D4)) = 0x60000000;
-	*((DWORD*)(0x824004D8)) = 0x60000000;
-
-	// Allow MM to start with peers who don't have exp loaded
-	*((DWORD*)(0x823F8B04)) = 0x60000000;
-	*((DWORD*)(0x822BB77C)) = 0x60000000;
-	*((DWORD*)(0x822BB788)) = 0x60000000;
-	*((DWORD*)(0x822BB794)) = 0x60000000;
-	*((DWORD*)(0x822BB7A0)) = 0x60000000;
-}
-
-VOID AllowRetailPlayers_HALOREACH_RETAIL()
-{
-	Sunrise_Dbg("Allowing Retail players");
-	// allow MM to start with offline players
-	*((DWORD*)(0x82290744)) = 0x60000000;
-	*((DWORD*)(0x82290750)) = 0x60000000;
-
-	// disable host migration before map/game variants are downloaded.
-	*((DWORD*)(0x82287B20)) = 0x60000000;
-	*((DWORD*)(0x82287B24)) = 0x60000000;
-	*((DWORD*)(0x82287B28)) = 0x60000000;
-	*((DWORD*)(0x82287B2C)) = 0x60000000;
-	*((DWORD*)(0x82287B30)) = 0x60000000;
-	*((DWORD*)(0x82287B38)) = 0x60000000;
-	*((DWORD*)(0x82287B40)) = 0x60000000;
-	*((DWORD*)(0x82287B60)) = 0x60000000;
-}
-
 // v0.8.31: the worker thread inspects game objects that the game can free at any moment. Catch any access violation
 // here so a stale pointer can never reach DashLaunch's last-chance handler (which kills the game).
 static volatile LONG g_FH2WorkerFaults = 0;
@@ -3474,6 +3418,8 @@ static VOID FH2_XgiPollSafe()
 {
     __try { FH2_XgiPoll(); }
     __except (EXCEPTION_EXECUTE_HANDLER) { }
+    __try { FH2_StuckWatch(); }   // v1.0.29
+    __except (EXCEPTION_EXECUTE_HANDLER) { }
 }
 
 // =============================================================================
@@ -3495,7 +3441,7 @@ static VOID FH2_XgiPollSafe()
 // watches those fields directly every 20 ms, starting before the relaunch (it is armed by the
 // first FH2 detection and keeps running across relaunches), and logs every CHANGE with a
 // millisecond offset. It also samples the Live sign-in state and the multiplayer privilege once
-// per second. It only runs when the log option is enabled in SR2:\FH2Synth.txt.
+// per second. It only runs when the log option is enabled in FH2Revival.ini.
 // =============================================================================
 #define FH2_V095_APP_PTR_ADDR 0x83422224
 #define FH2_V095_MGR_PTR_ADDR 0x8344DA6C
@@ -3594,6 +3540,53 @@ static VOID FH2_V095_PollOnce(FH2V095Ctx* c, DWORD now)
     DWORD ms = now - epoch;
 
     FH2_V095_Sample(&s);
+
+    // v1.0.23: log-file hold.  Both v1.0.22 freezes (9:38 and 9:45) stopped the whole console, including this thread, about 50 ms
+    // after the multiplayer-privilege check of an invite join, in the middle of a log/heartbeat file write.  While the invite
+    // manager is in a pending state (1..12) and for 8 s after it returns to 0 (the relaunch gap), at most 40 s in all, no file is
+    // opened: the lines stay in the queue and are written afterwards.  FH2Synth.txt word nohold turns this off.
+    // v1.0.28: latelog.  The relaunch for an invite join froze a tester's console about 12 s after the title start, right after the sign-in
+    // request, with logging on (and not with logging off).  With latelog no log or heartbeat file is opened for the first N seconds
+    // after every title start (default 120); the lines stay in the queue (the first ~300 are kept) and are written afterwards.
+    BOOL lateActive = FALSE;
+    {
+        extern BOOL g_FH2LateLog; extern DWORD g_FH2LateMs;
+        lateActive = g_FH2LateLog && (DWORD)(now - g_FH2_V095_Epoch) < g_FH2LateMs;
+    }
+    {
+        extern BOOL g_FH2NoHold;
+        static DWORD holdStart = 0, holdLast = 0, holdBegan = 0;
+        if (g_FH2NoHold)
+        {
+            extern BOOL g_FH2LateLog;
+            if (g_FH2LateLog)
+            {
+                LONG wantL = lateActive ? 1 : 0;
+                if (wantL != g_FH2LogHold)
+                {
+                    InterlockedExchange(&g_FH2LogHold, wantL);
+                    if (!wantL) FH2_Log("v1.0.28 latelog: log-file writes started (%u ms after the title start)", (unsigned)(now - g_FH2_V095_Epoch));
+                }
+            }
+        }
+        else
+        {
+            BOOL pending = (s.mgr >= 0x10000 && s.m4 >= 1 && s.m4 <= 12);
+            if (pending)
+            {
+                if (holdStart == 0) { holdStart = now; holdBegan = now; FH2_Log("v1.0.23 hold: log-file writes paused (invite state %u)", s.m4); }
+                holdLast = now;
+            }
+            else if (holdStart != 0 && (now - holdLast) >= 8000) holdStart = 0;
+            LONG want = (holdStart != 0 && (now - holdStart) < 40000) ? 1 : 0;
+            if (lateActive) want = 1;   // v1.0.28
+            if (want != g_FH2LogHold)
+            {
+                InterlockedExchange(&g_FH2LogHold, want);
+                if (!want) FH2_Log("v1.0.23 hold: log-file writes resumed after %u ms", now - holdBegan);
+            }
+        }
+    }
 
     // The app object disappearing means the previous game instance was torn down: restart the clock
     // so every offset below is relative to the new instance.
@@ -3698,13 +3691,14 @@ static VOID FH2_V095_PollOnce(FH2V095Ctx* c, DWORD now)
 }
 
 
-// v0.9.20: heartbeat.  Once a second (only while FH2 runs) ONE short line overwrites SR2:\FH2P2P_HB.txt.  It never grows.
+// v0.9.20: heartbeat.  Once a second (only while FH2 runs) ONE short line overwrites FH2P2P_HB.txt.  It never grows.
 // After a freeze the file shows the last second the plugin was alive and the game-side counters at that moment: if the
 // time stops, the whole console hung; if the time keeps going but xgi/recv stop, only the game hung.
 static VOID FH2_V0920_Heartbeat(DWORD now, DWORD title)
 {
     static DWORD lastHb = 0;
     if (title != ForzaHorizon2 || !g_FH2LogEnabled) return;
+    if (g_FH2LogHold) return;   // v1.0.23: no file I/O while an invite join runs
     if (lastHb != 0 && (now - lastHb) < 1000) return;
     lastHb = now;
     DWORD xs = 0, sn = 0, rc = 0;
@@ -3720,6 +3714,834 @@ static VOID FH2_V0920_Heartbeat(DWORD now, DWORD title)
     CloseHandle(h);
 }
 
+// v1.0.6: note every call of the game's popup builder (0x82887020: r3 = error index, r4 = popup type, caller LR) so the log shows which
+// code path produced the NO NETWORK ACCESS popup.  The game thread only writes four words into a ring; the poll thread logs them.
+static VOID FH2_FlushCode(VOID* p, DWORD bytes);
+static volatile DWORD g_FH2PopupN = 0;
+static DWORD g_FH2PopupRing[16][4];
+static BOOL g_FH2PopupHookInstalled = FALSE;
+VOID FH2_PopupNote(DWORD idx, DWORD type, DWORD caller)
+{
+	DWORD n = g_FH2PopupN;
+	DWORD* e = g_FH2PopupRing[n & 15];
+	e[0] = GetTickCount(); e[1] = idx; e[2] = type; e[3] = caller;
+	g_FH2PopupN = n + 1;
+}
+__declspec(naked) VOID FH2_PopupHook()
+{
+	__asm
+	{
+		mflr    r12
+		stwu    r1, -0x60(r1)
+		stw     r3, 0x40(r1)
+		stw     r4, 0x44(r1)
+		stw     r12, 0x48(r1)
+		mr      r5, r12
+		bl      FH2_PopupNote
+		lwz     r3, 0x40(r1)
+		lwz     r4, 0x44(r1)
+		lwz     r12, 0x48(r1)
+		addi    r1, r1, 0x60
+
+		// the instructions this hook replaced at 0x82887020: mflr r12 / bl 0x832FFF40 / stwu r1,-0x160(r1) / mr r30,r3
+		lis     r11, 0x832F
+		ori     r11, r11, 0xFF40
+		mtctr   r11
+		bctrl
+		stwu    r1, -0x160(r1)
+		mr      r30, r3
+
+		lis     r11, 0x8288
+		ori     r11, r11, 0x7030
+		mtctr   r11
+		bctr
+	}
+}
+
+// v1.0.47: black FESTIVAL tile.  The game shows a destination picture by asking its own database "SELECT ImagePath FROM RoadTripLocations WHERE Id = %u"
+// and loading ...\\DestinationImages\\Images_<size>\\Dest_<ImagePath>_<size>.xds from Textures.zip.  Festival (Id 0) has ImagePath "Festival", but the shipped zip
+// has no Dest_Festival_*.xds, so the tile is drawn black.  Three call sites (372x372/1280x720, 372x183, 185x372) load the SQL text address with a lis/addi pair;
+// point each at a copy of the query that answers another picture name for Id 0.  Pure data/instruction-word patch, nothing is hooked.
+static CHAR g_FH2FestSqlA[192];   // SELECT ImagePath ...
+static CHAR g_FH2FestSqlB[192];   // SELECT Name, ImagePath ...
+static BOOL FH2_FestPicSite(DWORD lisAddr, DWORD addiAddr, DWORD origAddi, const CHAR* sql)
+{
+	DWORD* pl = (DWORD*)lisAddr;
+	DWORD* pa = (DWORD*)addiAddr;
+	DWORD a = (DWORD)sql;
+	DWORD hi = ((a + 0x8000) >> 16) & 0xFFFF, lo = a & 0xFFFF;
+	if (pl[0] == 0x3D608204 && pa[0] == origAddi)
+	{
+		pl[0] = 0x3D600000 | hi;          // lis r11, hi
+		pa[0] = 0x388B0000 | lo;          // addi r4, r11, lo
+		FH2_FlushCode(pl, 4);
+		FH2_FlushCode(pa, 4);
+		FH2_Log("v1.0.47 Festival picture: query redirected at 0x%08X/0x%08X.", lisAddr, addiAddr);
+		return TRUE;
+	}
+	if ((pl[0] & 0xFFFF0000) == 0x3D600000 && (pa[0] & 0xFFFF0000) == 0x388B0000)
+		FH2_Log("v1.0.47 Festival picture: already redirected at 0x%08X.", lisAddr);
+	else
+		FH2_Log("v1.0.47 Festival picture patch SKIPPED at 0x%08X (found %08X %08X).", lisAddr, pl[0], pa[0]);
+	return FALSE;
+}
+static VOID FH2_FestPicPatch()
+{
+	extern CHAR g_FH2FestPic[40];
+	CHAR nm[40]; int n = 0;
+	for (; n < 31 && g_FH2FestPic[n]; ++n) nm[n] = g_FH2FestPic[n];
+	nm[n] = 0;
+	if (!n) { static const CHAR dflt[] = "NiceMassena"; memcpy(nm, dflt, sizeof(dflt)); }
+	// build the two queries by plain copying (no printf family): head + name + tail
+	static const CHAR headA[] = "SELECT CASE Id WHEN 0 THEN '";
+	static const CHAR headB[] = "SELECT Name, CASE Id WHEN 0 THEN '";
+	static const CHAR tail[]  = "' ELSE ImagePath END ImagePath FROM RoadTripLocations WHERE Id = %u";
+	for (int k = 0; k < 2; ++k)
+	{
+		CHAR* o = k ? g_FH2FestSqlB : g_FH2FestSqlA;
+		const CHAR* h = k ? headB : headA;
+		DWORD hl = (DWORD)strlen(h), nl = (DWORD)strlen(nm), tl = (DWORD)strlen(tail);
+		memcpy(o, h, hl); memcpy(o + hl, nm, nl); memcpy(o + hl + nl, tail, tl + 1);
+	}
+	FH2_Log("v1.0.47 Festival tile picture -> %s.", nm);
+	FH2_FestPicSite(0x827ADDFC, 0x827ADE04, 0x388BFA64, g_FH2FestSqlA);   // 372x372 / 1280x720 (lobby, vote)
+	FH2_FestPicSite(0x826E8138, 0x826E8140, 0x388BFA64, g_FH2FestSqlA);   // 372x183
+	FH2_FestPicSite(0x826977EC, 0x826977F8, 0x388B9F18, g_FH2FestSqlB);   // 185x372
+}
+
+static VOID FH2_InstallPopupHook()
+{
+	DWORD* p = (DWORD*)0x82887020;
+	if (p[0] == 0x7D8802A6 && p[1] == 0x48A78F1D && p[2] == 0x9421FEA0 && p[3] == 0x7C7E1B78)
+	{
+		PatchInJump(p, (DWORD)&FH2_PopupHook, FALSE);
+		FH2_FlushCode(p, 16);
+		g_FH2PopupHookInstalled = TRUE;
+		FH2_Log("v1.0.6 popup note hook installed at 0x82887020.");
+	}
+	else
+		FH2_Log("v1.0.6 popup note hook SKIPPED (found %08X %08X %08X %08X).", p[0], p[1], p[2], p[3]);
+}
+
+// v1.0.12: every state change of the game's lobby / party state machine goes through one function (0x829E31F8: r3 = object, r4 = new state,
+// object+0x2C = current state; the callers are the individual transitions and their timeouts).  Note each call (old state, new state, caller LR and two
+// return addresses further up the stack) so the log shows which transition ended the free-roam invite and why.  Game thread: only writes a ring.
+static volatile DWORD g_FH2LobbyN = 0;
+static DWORD g_FH2LobbyRing[32][8];
+static BOOL g_FH2LobbyHookInstalled = FALSE;
+VOID FH2_LobbyNote(DWORD obj, DWORD newState, DWORD caller, DWORD sp)
+{
+	DWORD n = g_FH2LobbyN;
+	DWORD* e = g_FH2LobbyRing[n & 31];
+	DWORD oldState = 0xFFFFFFFF;
+	if (obj >= 0x10000 && obj < 0x9FFFFF00 && MmIsAddressValid((PVOID)(obj + 0x2C)))
+		oldState = *(volatile DWORD*)(obj + 0x2C);
+	e[0] = GetTickCount(); e[1] = obj; e[2] = oldState; e[3] = newState; e[4] = caller; e[5] = 0; e[6] = 0; e[7] = 0;
+	DWORD s = sp;
+	for (int k = 0; k < 3; ++k)
+	{
+		if (s < 0x70000000 || s >= 0x80000000 || (s & 7) || !MmIsAddressValid((PVOID)s)) break;
+		DWORD prev = *(volatile DWORD*)s;
+		if (prev <= s || prev >= 0x80000000 || (prev & 7) || !MmIsAddressValid((PVOID)(prev - 8))) break;
+		DWORD ra = *(volatile DWORD*)(prev - 8);
+		if (ra < 0x82000000 || ra >= 0x84000000) break;
+		e[5 + k] = ra;
+		s = prev;
+	}
+	g_FH2LobbyN = n + 1;
+}
+__declspec(naked) VOID FH2_LobbyHook()
+{
+	__asm
+	{
+		mflr    r12
+		mr      r6, r1
+		stwu    r1, -0x60(r1)
+		stw     r3, 0x40(r1)
+		stw     r4, 0x44(r1)
+		stw     r12, 0x48(r1)
+		mr      r5, r12
+		bl      FH2_LobbyNote
+		lwz     r3, 0x40(r1)
+		lwz     r4, 0x44(r1)
+		lwz     r12, 0x48(r1)
+		addi    r1, r1, 0x60
+
+		// the instructions this hook replaced at 0x829E31F8: mflr r12 / bl 0x832FFF74 / stwu r1,-0x80(r1) / lbz r11,0x9B4(r3)
+		lis     r10, 0x832F
+		ori     r10, r10, 0xFF74
+		mtctr   r10
+		bctrl
+		stwu    r1, -0x80(r1)
+		lbz     r11, 0x9B4(r3)
+
+		lis     r10, 0x829E
+		ori     r10, r10, 0x3208
+		mtctr   r10
+		bctr
+	}
+}
+
+static VOID FH2_InstallLobbyHook()
+{
+	DWORD* p = (DWORD*)0x829E31F8;
+	if (p[0] == 0x7D8802A6 && p[1] == 0x4891CD79 && p[2] == 0x9421FF80 && p[3] == 0x896309B4)
+	{
+		PatchInJump(p, (DWORD)&FH2_LobbyHook, FALSE);
+		FH2_FlushCode(p, 16);
+		g_FH2LobbyHookInstalled = TRUE;
+		FH2_Log("v1.0.12 lobby state hook installed at 0x829E31F8.");
+	}
+	else
+		FH2_Log("v1.0.12 lobby state hook SKIPPED (found %08X %08X %08X %08X).", p[0], p[1], p[2], p[3]);
+}
+
+// v1.0.13: the lobby stop that ends the free-roam invite comes from a UI message handler (0x8283BD28: r3 = screen, r4 = message id, r6 = message
+// data, handled only for r4 == 0 and *(r6+0xC) == 0).  Note every call with r4 == 0 plus the first words of the message data.
+BOOL g_FH2NoCancel = FALSE;
+BOOL g_FH2Pad = FALSE;   // v1.0.16: word 'pad' = log controller button changes (v1.0.15 did this always and the log stopped before the error)
+static volatile DWORD g_FH2MsgN = 0;
+static DWORD g_FH2MsgRing[16][26];
+static volatile DWORD g_FH2MsgAll = 0;
+static BOOL g_FH2MsgHookInstalled = FALSE;
+extern BOOL g_FH2NoCancel;
+DWORD FH2_MsgNote(DWORD scr, DWORD id, DWORD r5, DWORD r6, DWORD caller, DWORD sp)
+{
+	g_FH2MsgAll = g_FH2MsgAll + 1;
+	if (id != 0) return 0;
+	DWORD n = g_FH2MsgN;
+	DWORD* e = g_FH2MsgRing[n & 15];
+	e[0] = GetTickCount(); e[1] = scr; e[2] = r5; e[3] = r6; e[4] = caller;
+	for (int k = 0; k < 7; ++k) e[5 + k] = 0xFFFFFFFE;
+	e[24] = 0xFFFFFFFE; e[25] = 0xFFFFFFFE;
+	if (scr >= 0x10000 && scr < 0x9FFFFF00 && !(scr & 3) && MmIsAddressValid((PVOID)scr) && MmIsAddressValid((PVOID)(scr + 7))) { e[24] = *(volatile DWORD*)scr; e[25] = *(volatile DWORD*)(scr + 4); }   // v1.0.20: class of the dialog
+	if (r6 >= 0x10000 && r6 < 0x9FFFFF00 && !(r6 & 3) && MmIsAddressValid((PVOID)r6) && MmIsAddressValid((PVOID)(r6 + 27)))
+		for (int k = 0; k < 7; ++k) e[5 + k] = ((volatile DWORD*)r6)[k];
+	// return addresses above the handler: words in the game's code that follow a bl
+	DWORD found = 0;
+	for (int k = 12; k < 24; ++k) e[k] = 0;
+	for (DWORD a = sp; a < sp + 0x600 && found < 12; a += 4)
+	{
+		if (!MmIsAddressValid((PVOID)a)) break;
+		DWORD v = *(volatile DWORD*)a;
+		if (v < 0x82000100 || v >= 0x83000000 || (v & 3)) continue;
+		DWORD prev = *(volatile DWORD*)(v - 4);
+		if ((prev & 0xFC000003) != 0x48000001) continue;
+		e[12 + found++] = v;
+	}
+	g_FH2MsgN = n + 1;
+	// opt-in ("nocancel" in FH2Synth.txt): swallow the blank message (+0xC == 0) whose handler stops the lobby
+	return 0;
+}
+__declspec(naked) VOID FH2_MsgHook()
+{
+	__asm
+	{
+		mflr    r12
+		stwu    r1, -0x70(r1)
+		stw     r3, 0x40(r1)
+		stw     r4, 0x44(r1)
+		stw     r5, 0x48(r1)
+		stw     r6, 0x4C(r1)
+		stw     r7, 0x50(r1)
+		stw     r12, 0x54(r1)
+		mr      r7, r12
+		addi    r8, r1, 0x70
+		bl      FH2_MsgNote
+		cmplwi  cr6, r3, 0
+		bne     cr6, msg_skip
+		lwz     r3, 0x40(r1)
+		lwz     r4, 0x44(r1)
+		lwz     r5, 0x48(r1)
+		lwz     r6, 0x4C(r1)
+		lwz     r7, 0x50(r1)
+		lwz     r12, 0x54(r1)
+		addi    r1, r1, 0x70
+		b       msg_replay
+msg_skip:
+		lwz     r12, 0x54(r1)
+		mtlr    r12
+		addi    r1, r1, 0x70
+		li      r3, 0
+		blr
+msg_replay:
+
+		// the instructions this hook replaced at 0x8283BD28: mflr r12 / bl 0x832FFF88 / std r31,-0x10(r1) / stwu r1,-0x60(r1)
+		lis     r10, 0x832F
+		ori     r10, r10, 0xFF88
+		mtctr   r10
+		bctrl
+		std     r31, -0x10(r1)
+		stwu    r1, -0x60(r1)
+
+		lis     r10, 0x8283
+		ori     r10, r10, 0xBD38
+		mtctr   r10
+		bctr
+	}
+}
+
+// v1.0.18: every dialog the game shows goes through the UI manager's ShowMessage method (vtable slot 0x4C = 0x82FF5588; r4 = type,
+// r5 = string id, 0x14F = the 'NO NETWORK ACCESS' text).  Log each call with the call chain, so the moment the error APPEARS is known.
+// (The id-0 message hooked above turned out to be what pressing OK on that dialog sends.)
+static volatile DWORD g_FH2DlgN = 0;
+static DWORD g_FH2DlgRing[16][64];   // v1.0.45: 20 -> 64 words per entry (deeper call chain)
+VOID FH2_DlgNote(DWORD obj, DWORD a4, DWORD a5, DWORD a6, DWORD a7, DWORD a8, DWORD lr, DWORD sp)
+{
+	DWORD n = g_FH2DlgN;
+	DWORD* e = g_FH2DlgRing[n & 15];
+	e[0] = GetTickCount(); e[1] = a4; e[2] = a5; e[3] = a6; e[4] = a7; e[5] = a8; e[6] = lr;
+	for (int k = 7; k < 64; ++k) e[k] = 0;
+	DWORD found = 0;
+	for (DWORD a = sp; a < sp + 0x1400 && found < 55; a += 4)
+	{
+		if (!MmIsAddressValid((PVOID)a)) break;
+		DWORD v = *(volatile DWORD*)a;
+		if (v < 0x82000100 || v >= 0x83000000 || (v & 3)) continue;
+		DWORD prev = *(volatile DWORD*)(v - 4);
+		if ((prev & 0xFC000003) != 0x48000001 && prev != 0x4E800421) continue;
+		e[7 + found++] = v;
+	}
+	g_FH2DlgN = n + 1;
+}
+__declspec(naked) VOID FH2_DlgHook()
+{
+	__asm
+	{
+		mflr    r12
+		stwu    r1, -0x80(r1)
+		stw     r3, 0x40(r1)
+		stw     r4, 0x44(r1)
+		stw     r5, 0x48(r1)
+		stw     r6, 0x4C(r1)
+		stw     r7, 0x50(r1)
+		stw     r8, 0x54(r1)
+		stw     r12, 0x58(r1)
+		mr      r9, r12
+		addi    r10, r1, 0x80
+		bl      FH2_DlgNote
+		lwz     r3, 0x40(r1)
+		lwz     r4, 0x44(r1)
+		lwz     r5, 0x48(r1)
+		lwz     r6, 0x4C(r1)
+		lwz     r7, 0x50(r1)
+		lwz     r8, 0x54(r1)
+		lwz     r12, 0x58(r1)
+		addi    r1, r1, 0x80
+
+		// replayed from 0x82FF5588: mflr r12 / bl 0x832FFF70 / stwu r1,-0x90(r1) / mr r31,r3
+		lis     r10, 0x832F
+		ori     r10, r10, 0xFF70
+		mtctr   r10
+		bctrl
+		stwu    r1, -0x90(r1)
+		mr      r31, r3
+
+		lis     r10, 0x82FF
+		ori     r10, r10, 0x5598
+		mtctr   r10
+		bctr
+	}
+}
+
+static VOID FH2_InstallDlgHook()
+{
+	DWORD* p = (DWORD*)0x82FF5588;
+	if (p[0] == 0x7D8802A6 && p[1] == 0x4830A9E5 && p[2] == 0x9421FF70 && p[3] == 0x7C7F1B78)
+	{
+		PatchInJump(p, (DWORD)&FH2_DlgHook, FALSE);
+		FH2_FlushCode(p, 16);
+		FH2_Log("v1.0.18 dialog hook installed at 0x82FF5588.");
+	}
+	else
+		FH2_Log("v1.0.18 dialog hook SKIPPED (found %08X %08X %08X %08X).", p[0], p[1], p[2], p[3]);
+}
+
+
+// v1.0.20: the error dialog is NOT shown through the ShowMessage routine above (v1.0.19 log is complete and has no such call at the
+// moment it appears).  Its OK handler (0x8283BD28) belongs to two screen classes whose constructors both call the common screen base
+// constructor 0x826BE720.  Log every call to that base constructor (the lr tells the class: 0x8283B798 / 0x82837A3C) with the call chain,
+// so the log shows WHEN the error screen is built and by whom.
+static volatile DWORD g_FH2ScrN = 0;
+static DWORD g_FH2ScrRing[64][12];
+// v1.0.46: make the game report the player's own level / badge / title to the title server.  The game does that (CBadgeTitleManager::UpdateServerData,
+// 0x82504DD8 -> SetPlayercardInfo web call) only when a badge/title unlocks, so the server never knew anyone's level and every leaderboard row showed 1.
+// Runs on the game's own thread (this hook fires when a screen is built), once, 40 s after the first connect to the title server (logon is done by then).
+// The manager object is found the same way the game's UI does (0x827F7150): G=*(0x83422224); profile=*(G+0x6C); R=0x8254F878(profile); manager=R+0x3C.
+extern volatile DWORD g_FH2HttpTick; extern BOOL g_FH2NoCard;
+static volatile DWORD g_FH2CardDone = 0;
+static VOID FH2_CardPush()
+{
+	if (g_FH2CardDone || g_FH2NoCard) return;
+	DWORD t0 = g_FH2HttpTick;
+	if (!t0) return;
+	DWORD now = GetTickCount();
+	if (now - t0 < 40000) return;
+	static DWORD lastTry = 0, tries = 0;
+	if (lastTry && now - lastTry < 5000) return;
+	lastTry = now;
+	if (++tries > 8) { g_FH2CardDone = 1; FH2_Log("v1.0.46 PLAYERCARD: giving up after 8 tries."); return; }
+	DWORD G = *(volatile DWORD*)0x83422224;
+	if (G < 0x10000 || G >= 0x9FFFFF00 || !MmIsAddressValid((PVOID)(G + 0x70))) { FH2_Log("v1.0.46 PLAYERCARD: try %u: game object not ready (G=%08X).", tries, G); return; }
+	DWORD prof = *(volatile DWORD*)(G + 0x6C);
+	if (prof < 0x10000 || prof >= 0x9FFFFF00 || !MmIsAddressValid((PVOID)prof)) { FH2_Log("v1.0.46 PLAYERCARD: try %u: profile not ready (G=%08X prof=%08X).", tries, G, prof); return; }
+	typedef DWORD (*pCardFn)(DWORD);
+	DWORD R = ((pCardFn)0x8254F878)(prof);
+	if (R < 0x10000 || R >= 0x9FFFFF00 || !MmIsAddressValid((PVOID)(R + 0x40))) { FH2_Log("v1.0.46 PLAYERCARD: try %u: profile data not ready (prof=%08X R=%08X).", tries, prof, R); return; }
+	DWORD mgr = R + 0x3C;
+	DWORD settings = *(volatile DWORD*)mgr;
+	if (settings < 0x10000 || settings >= 0x9FFFFF00) { FH2_Log("v1.0.46 PLAYERCARD: try %u: no settings yet (mgr=%08X settings=%08X).", tries, mgr, settings); return; }
+	g_FH2CardDone = 1;
+	FH2_Log("v1.0.46 PLAYERCARD: tick=%u calling UpdateServerData(mgr=%08X settings=%08X) G=%08X prof=%08X R=%08X", now, mgr, settings, G, prof, R);
+	((pCardFn)0x82504DD8)(mgr);
+	FH2_Log("v1.0.46 PLAYERCARD: UpdateServerData returned.");
+}
+
+VOID FH2_ScrNote(DWORD obj, DWORD a4, DWORD a5, DWORD a6, DWORD a7, DWORD a8, DWORD lr, DWORD sp)
+{
+	FH2_CardPush();
+	DWORD n = g_FH2ScrN;
+	DWORD* e = g_FH2ScrRing[n & 63];
+	e[0] = GetTickCount(); e[1] = obj; e[2] = lr; e[3] = a7;
+	for (int k = 4; k < 12; ++k) e[k] = 0;
+	DWORD found = 0;
+	for (DWORD a = sp; a < sp + 0x400 && found < 8; a += 4)
+	{
+		if (!MmIsAddressValid((PVOID)a)) break;
+		DWORD v = *(volatile DWORD*)a;
+		if (v < 0x82000100 || v >= 0x83000000 || (v & 3)) continue;
+		DWORD prev = *(volatile DWORD*)(v - 4);
+		if ((prev & 0xFC000003) != 0x48000001 && prev != 0x4E800421) continue;
+		e[4 + found++] = v;
+	}
+	g_FH2ScrN = n + 1;
+}
+__declspec(naked) VOID FH2_ScrHook()
+{
+	__asm
+	{
+		mflr    r12
+		stwu    r1, -0x80(r1)
+		stw     r3, 0x40(r1)
+		stw     r4, 0x44(r1)
+		stw     r5, 0x48(r1)
+		stw     r6, 0x4C(r1)
+		stw     r7, 0x50(r1)
+		stw     r8, 0x54(r1)
+		stw     r12, 0x58(r1)
+		mr      r9, r12
+		addi    r10, r1, 0x80
+		bl      FH2_ScrNote
+		lwz     r3, 0x40(r1)
+		lwz     r4, 0x44(r1)
+		lwz     r5, 0x48(r1)
+		lwz     r6, 0x4C(r1)
+		lwz     r7, 0x50(r1)
+		lwz     r8, 0x54(r1)
+		lwz     r12, 0x58(r1)
+		addi    r1, r1, 0x80
+
+		// replayed from 0x826BE720: mflr r12 / bl 0x832FFF78 / stwu r1,-0x80(r1) / mr r31,r3
+		lis     r10, 0x832F
+		ori     r10, r10, 0xFF78
+		mtctr   r10
+		bctrl
+		stwu    r1, -0x80(r1)
+		mr      r31, r3
+
+		lis     r10, 0x826B
+		ori     r10, r10, 0xE730
+		mtctr   r10
+		bctr
+	}
+}
+
+static VOID FH2_InstallScrHook()
+{
+	DWORD* p = (DWORD*)0x826BE720;
+	if (p[0] == 0x7D8802A6 && p[1] == 0x48C41855 && p[2] == 0x9421FF80 && p[3] == 0x7C7F1B78)
+	{
+		PatchInJump(p, (DWORD)&FH2_ScrHook, FALSE);
+		FH2_FlushCode(p, 16);
+		FH2_Log("v1.0.20 screen constructor hook installed at 0x826BE720.");
+	}
+	else
+		FH2_Log("v1.0.20 screen constructor hook SKIPPED (found %08X %08X %08X %08X).", p[0], p[1], p[2], p[3]);
+}
+
+static VOID FH2_InstallMsgHook()
+{
+	DWORD* p = (DWORD*)0x8283BD28;
+	if (p[0] == 0x7D8802A6 && p[1] == 0x48AC425D && p[2] == 0xFBE1FFF0 && p[3] == 0x9421FFA0)
+	{
+		PatchInJump(p, (DWORD)&FH2_MsgHook, FALSE);
+		FH2_FlushCode(p, 16);
+		g_FH2MsgHookInstalled = TRUE;
+		FH2_Log("v1.0.13 UI message hook installed at 0x8283BD28.");
+	}
+	else
+		FH2_Log("v1.0.13 UI message hook SKIPPED (found %08X %08X %08X %08X).", p[0], p[1], p[2], p[3]);
+}
+
+// v1.0.5: the game's online manager (global pointer at 0x8344DB78) keeps its state in the word at +8.  2 = an operation timed out,
+// 6 = "cannot connect to Xbox Live" (shows the NO NETWORK ACCESS popup).  Log every change so the log shows what the game decided and when.
+// v1.0.31: snapshots of the stunt-start loading screen (ctor 828109D8, 0x5A0 bytes), its dialog data (id 0x4E) and the in-event screen (ctor 827F58E0, 0x3B8 bytes)
+static DWORD g_SnapObj = 0, g_SnapT0 = 0, g_SnapDlg = 0, g_SnapStage = 0;
+static DWORD g_SnapObj2 = 0, g_SnapT2 = 0, g_SnapStage2 = 0;
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// (the broadcast info block is 0x58 bytes at CConsole+0x2C in the retail build; the 97-byte ConsoleInfo message = 105-byte datagram in the P2P logs)
+// v1.0.36: console flags / game arbiter / starting grid.  READ-ONLY poll from the existing 20 ms thread (no code hooks, nothing is called in
+// the game).  Static analysis of the beta build (symbols) matched to the retail image shows that the 3-player co-op start is gated by
+// per-console flag words that every console broadcasts (CConsole::BroadcastConsoleInfo, flags at CConsole+0x24, second word at +0x28):
+//   0x01/0x02 render-ready, 0x08 session host, 0x10 GAME ARBITER (sends the start message, broadcasts the starting grid), 0x200 has the grid.
+// SyncStartingGrid waits until CConsoleManager::AllConsolesHaveGrid (0x8254F0E8) is true: the local console has 0x200 AND every console with
+// 0x02 also has 0x200.  The arbiter is elected by UpdateGameArbiterStatus (0x827703C0): lowest XUID among the ready consoles.
+// Retail addresses: console manager pointer at 0x83429C74 (+0x18 local CConsole, +0x0C std::map head node, value at node+0x10);
+// lobby object pointer at 0x8344DA70 (+0xB0C race synchronisation manager: +0x0C state, +0x04 start time).
+static BOOL FH2_GdRead(DWORD a, DWORD* out)
+{
+	if (a < 0x10000 || a >= 0x9FFFFF00 || (a & 3)) return FALSE;
+	if (!MmIsAddressValid((PVOID)a) || !MmIsAddressValid((PVOID)(a + 3))) return FALSE;
+	*out = *(volatile DWORD*)a;
+	return TRUE;
+}
+static DWORD g_gdHead = 0;
+static BOOL FH2_GdIsNil(DWORD node)   // v1.0.40: the sentinel IS the map's head node (leaves and the root's parent point at it).  v1.0.40's log showed the
+{                                      // _Isnil byte of a REAL node is non-zero in this build, so the byte test made every walk end at once (mapcons=0).
+	if (node < 0x10000 || node >= 0x9FFFFF00) return TRUE;
+	return node == g_gdHead;
+}
+static DWORD FH2_GdSucc(DWORD node, DWORD head)   // in-order successor, like the iterator ++ the game uses
+{
+	DWORD right = 0, left = 0, parent = 0;
+	if (!FH2_GdRead(node + 8, &right)) return head;
+	if (!FH2_GdIsNil(right))
+	{
+		node = right;
+		for (int k = 0; k < 40; ++k)
+		{
+			if (!FH2_GdRead(node, &left)) return head;
+			if (FH2_GdIsNil(left)) break;
+			node = left;
+		}
+		return node;
+	}
+	for (int k = 0; k < 40; ++k)
+	{
+		if (!FH2_GdRead(node + 4, &parent)) return head;
+		if (FH2_GdIsNil(parent)) return parent;
+		if (!FH2_GdRead(parent + 8, &right)) return head;
+		if (node != right) return parent;
+		node = parent;
+	}
+	return head;
+}
+static int FH2_GdName(DWORD f, CHAR* out, int cap)
+{
+	int p = 0;
+	p += sprintf_s(out + p, cap - p, "%s%s%s%s%s", (f & 1) ? "R1 " : "", (f & 2) ? "R2 " : "", (f & 8) ? "HOST " : "", (f & 0x10) ? "ARB " : "", (f & 0x200) ? "GRID" : "");
+	DWORD other = f & ~(DWORD)(1 | 2 | 8 | 0x10 | 0x200);
+	if (other) p += sprintf_s(out + p, cap - p, " +%X", other);
+	return p;
+}
+// v1.0.40: best-effort player identity.  The 0x58-byte info block each console broadcasts (CConsole+0x2C) should hold its XUID; the layout is
+// not verified, so look for the first 64-bit value whose high word starts with 0x0009 (XUID of a real profile) and report its LOW word.
+// A guess, so the GRID INFO line (whole block) is still written once per console to confirm it by hand.
+static DWORD FH2_GdXuidLo(DWORD con)
+{
+	for (DWORD o = 0; o + 8 <= 0x58; o += 4)
+	{
+		DWORD hi = 0, lo = 0;
+		if (FH2_GdRead(con + 0x2C + o, &hi) && (hi & 0xFFFF0000) == 0x00090000 && FH2_GdRead(con + 0x2C + o + 4, &lo)) return lo;
+	}
+	return 0;
+}
+#define FH2_GD_MAX 8
+static VOID FH2_GridDiag(DWORD now)
+{
+	// v1.0.40: v1.0.36-38 only walked the map of REMOTE consoles and logged "cons=0" the whole time (the local console is kept separately at
+	// manager+0x18, outside the map, and the game reads its flags directly).  Now: local flags read directly, the map size and a raw dump of the
+	// manager are logged, and the all-grid / arbiter logic follows the game's own functions (local console + every console in the map).
+	static DWORD sig[8 + FH2_GD_MAX * 3];
+	static BOOL sigInit = FALSE;
+	static DWORD lastLog = 0, lastSize = 0xFFFFFFFF, lastFail = 0, failN = 0;
+	static DWORD seen[24];
+	static DWORD seenN = 0;
+	static BOOL armed = FALSE;
+	if (!armed) { armed = TRUE; FH2_Log("v1.0.40 GRID armed: console-state poll is running (tick=%u)", now); }
+	DWORD mgr = 0, local = 0, head = 0, node = 0, size = 0xFFFFFFFF, lf1 = 0, lf2 = 0;
+#define FH2_GD_FAIL(step) { if (failN < 3 || (DWORD)(now - lastFail) >= 30000) { ++failN; lastFail = now; FH2_Log("v1.0.40 GRID unreadable: step=%d mgr=%08X local=%08X head=%08X", step, mgr, local, head); } return; }
+	if (!FH2_GdRead(0x83429C74, &mgr) || mgr < 0x10000) FH2_GD_FAIL(1)
+	if (!FH2_GdRead(mgr + 0x18, &local) || !FH2_GdRead(mgr + 0x0C, &head) || head < 0x10000) FH2_GD_FAIL(2)
+	if (!FH2_GdRead(head, &node)) FH2_GD_FAIL(3)
+	g_gdHead = head;
+	FH2_GdRead(mgr + 0x10, &size);
+	if (local >= 0x10000) { FH2_GdRead(local + 0x24, &lf1); FH2_GdRead(local + 0x28, &lf2); }
+
+	DWORD cp[FH2_GD_MAX], f1[FH2_GD_MAX], f2[FH2_GD_MAX], xl[FH2_GD_MAX], n = 0;
+	for (int guard = 0; guard < 40 && node != head && n < FH2_GD_MAX; ++guard)
+	{
+		if (FH2_GdIsNil(node)) break;
+		DWORD con = 0, a = 0, b = 0;
+		if (FH2_GdRead(node + 0x10, &con) && con >= 0x10000 && FH2_GdRead(con + 0x24, &a) && FH2_GdRead(con + 0x28, &b))
+		{
+			cp[n] = con; f1[n] = a; f2[n] = b; xl[n] = FH2_GdXuidLo(con); ++n;
+		}
+		node = FH2_GdSucc(node, head);
+	}
+	DWORD xlLocal = (local >= 0x10000) ? FH2_GdXuidLo(local) : 0;
+
+	// race synchronisation manager (start time / state)
+	DWORD lobby = 0, rsm = 0, rsmState = 0xFFFFFFFF, rsmStart = 0;
+	if (FH2_GdRead(0x8344DA70, &lobby) && lobby >= 0x10000 && FH2_GdRead(lobby + 0xB0C, &rsm) && rsm >= 0x10000)
+	{
+		if (!FH2_GdRead(rsm + 0x0C, &rsmState)) rsmState = 0xFFFFFFFE;
+		FH2_GdRead(rsm + 0x04, &rsmStart);
+	}
+
+	// the game's own logic: arbiter = any console (local first, then the map) with 0x10; AllConsolesHaveGrid (retail 0x8254F0E8) =
+	// local has 0x200 AND every console in the map that has 0x02 also has 0x200
+	DWORD nArb = (lf1 & 0x10) ? 1 : 0, blocker = 0;
+	BOOL all = TRUE;
+	for (DWORD i = 0; i < n; ++i) if (f1[i] & 0x10) ++nArb;
+	if (!(lf1 & 0x200)) { all = FALSE; blocker = 1; }   // 1 = the local console itself has no grid yet
+	for (DWORD i = 0; i < n && all; ++i)
+		if ((f1[i] & 2) && !(f1[i] & 0x200)) { all = FALSE; blocker = cp[i]; }
+
+	DWORD cur[8 + FH2_GD_MAX * 3];
+	memset(cur, 0, sizeof(cur));
+	cur[0] = n; cur[1] = local; cur[2] = rsmState; cur[3] = size; cur[4] = lf1; cur[5] = lf2; cur[6] = mgr; cur[7] = head;
+	for (DWORD i = 0; i < n; ++i) { cur[8 + i * 3] = cp[i]; cur[9 + i * 3] = f1[i]; cur[10 + i * 3] = f2[i] ^ (xl[i] * 31); }
+	BOOL changed = !sigInit || memcmp(cur, sig, sizeof(cur)) != 0;
+	BOOL periodic = (n >= 1 || (size != 0xFFFFFFFF && size > 0) || lf1 != 0) && (DWORD)(now - lastLog) >= 5000;
+	if (!changed && !periodic) return;
+
+	// line 1: local console + manager
+	FH2_Log("v1.0.40 GRID %s tick=%u mgr=%08X head=%08X size=%d mapcons=%u LOCAL con=%08X x=%08X f=%08X/%08X arb=%u allGrid=%d blocker=%s rsm=%08X st=%d start=%d",
+		changed ? "CHANGE" : "STATE", now, mgr, head, (int)size, n, local, xlLocal, lf1, lf2, nArb, all ? 1 : 0,
+		(blocker == 0) ? "-" : (blocker == 1 ? "LOCAL" : "REMOTE"), rsm, (int)rsmState, (int)rsmStart);
+
+	// line 2: the consoles in the map
+	if (n > 0)
+	{
+		CHAR line[460]; int p = 0;
+		p += sprintf_s(line + p, sizeof(line) - p, "v1.0.40 GRID MAP tick=%u |", now);
+		for (DWORD i = 0; i < n && p < (int)sizeof(line) - 95; ++i)
+		{
+			CHAR nm[48]; FH2_GdName(f1[i], nm, sizeof(nm));
+			p += sprintf_s(line + p, sizeof(line) - p, " [%s%s con=%08X x=%08X f=%08X/%08X %s]", (cp[i] == local) ? "LOCAL" : "remote", (cp[i] == blocker) ? " BLOCKER" : "", cp[i], xl[i], f1[i], f2[i], nm);
+		}
+		FH2_Log("%s", line);
+	}
+	memcpy(sig, cur, sizeof(sig)); sigInit = TRUE; lastLog = now;
+
+	// raw dump of the manager object whenever its map size changes (and once at the start): proves the layout when the walk finds nothing
+	if (size != lastSize)
+	{
+		lastSize = size;
+		CHAR hx[300]; int q = 0;
+		for (DWORD o = 0; o < 0x40 && q < (int)sizeof(hx) - 12; o += 4)
+		{
+			DWORD w = 0;
+			if (FH2_GdRead(mgr + o, &w)) q += sprintf_s(hx + q, sizeof(hx) - q, "%08X ", w);
+			else q += sprintf_s(hx + q, sizeof(hx) - q, "???????? ");
+		}
+		FH2_Log("v1.0.40 GRID MGR size=%d mgr(+00..3C): %s", (int)size, hx);
+		DWORD hw[4] = { 0, 0, 0, 0 };
+		FH2_GdRead(head, &hw[0]); FH2_GdRead(head + 4, &hw[1]); FH2_GdRead(head + 8, &hw[2]); FH2_GdRead(head + 12, &hw[3]);
+		FH2_Log("v1.0.40 GRID HEAD head=%08X: %08X %08X %08X %08X  (first node=%08X nil=%d)", head, hw[0], hw[1], hw[2], hw[3], hw[0], FH2_GdIsNil(hw[0]) ? 1 : 0);
+	}
+
+	// first sight of a console: its broadcast info block (0x58 bytes at +0x2C), once, to tell the consoles apart (local console included)
+	DWORD allc[FH2_GD_MAX + 1]; DWORD na = 0;
+	if (local >= 0x10000) allc[na++] = local;
+	for (DWORD i = 0; i < n; ++i) if (cp[i] != local) allc[na++] = cp[i];
+	for (DWORD i = 0; i < na; ++i)
+	{
+		BOOL known = FALSE;
+		for (DWORD k = 0; k < seenN && k < 24; ++k) if (seen[k] == allc[i]) known = TRUE;
+		if (known) continue;
+		seen[seenN % 24] = allc[i]; ++seenN;
+		CHAR hx[240]; int q = 0;
+		for (DWORD o = 0; o < 0x58 && q < (int)sizeof(hx) - 12; o += 4)
+		{
+			DWORD w = 0;
+			if (FH2_GdRead(allc[i] + 0x2C + o, &w)) q += sprintf_s(hx + q, sizeof(hx) - q, "%08X ", w);
+			else q += sprintf_s(hx + q, sizeof(hx) - q, "???????? ");
+		}
+		FH2_Log("v1.0.40 GRID INFO con=%08X %s info(+2C): %s", allc[i], (allc[i] == local) ? "LOCAL" : "remote", hx);
+	}
+}
+
+static VOID FH2_V105_StateSample(DWORD now)
+{
+	if (g_FH2GridDiag) FH2_GridDiag(now);   // v1.0.36
+	if (g_FH2WaitDiag || g_FH2LockDiag) FH2_WaitDiagPoll(now);   // v1.0.41/43
+	// v1.0.8: also the game's connection object (global 0x8344DA70: +0x2C = connection state, 0 means "not connected to Live", +0x31 = flag)
+	// and the manager's failure fields (+0x14, +0xE0, +0xE4 are written when the failure popup path runs).
+	static DWORD last[8] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF };
+	DWORD cur[8] = { 0, 0xFFFFFFFE, 0xFFFFFFFE, 0xFFFFFFFE, 0xFFFFFFFE, 0xFFFFFFFE, 0xFFFFFFFE, 0xFFFFFFFE };
+	DWORD mgr = *(volatile DWORD*)0x8344DB78;
+	DWORD con = *(volatile DWORD*)0x8344DA70;
+	cur[0] = mgr;
+	if (mgr >= 0x10000 && mgr < 0x9FFFFF00 && MmIsAddressValid((PVOID)mgr) && MmIsAddressValid((PVOID)(mgr + 0xE8)))
+	{
+		cur[1] = *(volatile DWORD*)(mgr + 8);
+		cur[2] = *(volatile DWORD*)(mgr + 0x14);
+		cur[3] = *(volatile DWORD*)(mgr + 0xE0);
+		cur[4] = *(volatile DWORD*)(mgr + 0xE4);
+	}
+	cur[5] = con;
+	if (con >= 0x10000 && con < 0x9FFFFF00 && MmIsAddressValid((PVOID)con) && MmIsAddressValid((PVOID)(con + 0x34)))
+	{
+		cur[6] = *(volatile DWORD*)(con + 0x2C);
+		cur[7] = *(volatile BYTE*)(con + 0x31);
+	}
+	BOOL changed = FALSE;
+	for (int k = 0; k < 8; ++k) if (cur[k] != last[k]) changed = TRUE;
+	if (changed)
+	{
+		FH2_Log("v1.0.8 ONLINE STATE: tick=%u mgr=%08X state=%d +14=%d +E0=%d +E4=%d | conn=%08X +2C=%d +31=%d", now, cur[0], (int)cur[1], (int)cur[2], (int)cur[3], (int)cur[4], cur[5], (int)cur[6], (int)cur[7]);
+		for (int k = 0; k < 8; ++k) last[k] = cur[k];
+	}
+	{
+		typedef DWORD (*pXamInputGetState)(DWORD, DWORD, PVOID);
+		static pXamInputGetState fn = NULL; static BOOL tried = FALSE;
+		static WORD lastBtn[4] = {0,0,0,0}; static DWORD lastPkt[4] = {0,0,0,0};
+		if (g_FH2Pad && !tried) { tried = TRUE; fn = (pXamInputGetState)ResolveFunction("xam.xex", 401); }
+		if (g_FH2Pad && fn)
+			for (DWORD u = 0; u < 4; ++u)
+			{
+				struct { DWORD pkt; WORD btn; BYTE lt, rt; SHORT lx, ly, rx, ry; } st;
+				memset(&st, 0, sizeof(st));
+				if (fn(u, 0, &st) != 0) continue;
+				if (st.btn != lastBtn[u])
+				{
+					FH2_Log("v1.0.15 PAD %u: tick=%u buttons=%04X -> %04X", u, now, lastBtn[u], st.btn);
+					lastBtn[u] = st.btn;
+				}
+			}
+	}
+	{
+		// v1.0.17: proof of life every 5 s, so a log that ends early can be told apart from a thread that stopped
+		static DWORD lastAlive = 0;
+		if (now - lastAlive >= 5000)
+		{
+			lastAlive = now;
+			FH2_Log("v1.0.17 ALIVE: tick=%u msgCalls=%u idZero=%u lobbyChanges=%u", now, g_FH2MsgAll, g_FH2MsgN, g_FH2LobbyN);
+		}
+	}
+	{
+		static DWORD msgLogged = 0;
+		DWORD mn = g_FH2MsgN;
+		if (mn != msgLogged) XNotify(L"FH2: OK/cancel message");
+		while (msgLogged != mn)
+		{
+			DWORD* e = g_FH2MsgRing[msgLogged & 15];
+			FH2_Log("v1.0.13 UI MESSAGE id=0: tick=%u screen=%08X r5=%08X data=%08X caller=%08X words: %08X %08X %08X %08X %08X %08X %08X (all calls so far %u)",
+				e[0], e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8], e[9], e[10], e[11], g_FH2MsgAll);
+			FH2_Log("v1.0.20 UI MESSAGE dialog vtable=%08X/%08X", e[24], e[25]);
+			FH2_Log("v1.0.13 UI MESSAGE stack: %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X",
+				e[12], e[13], e[14], e[15], e[16], e[17], e[18], e[19], e[20], e[21], e[22], e[23]);
+			++msgLogged;
+			if (mn - msgLogged > 16) msgLogged = mn - 16;
+		}
+	}
+	{
+		static DWORD scrLogged = 0;
+		DWORD sn = g_FH2ScrN;
+		if (sn - scrLogged > 64) scrLogged = sn - 64;
+		while (scrLogged != sn)
+		{
+			DWORD* e = g_FH2ScrRing[scrLogged & 63];
+			FH2_Log("v1.0.20 SCREEN: tick=%u obj=%08X lr=%08X chain: %08X %08X %08X %08X %08X %08X %08X %08X",
+				e[0], e[1], e[2], e[4], e[5], e[6], e[7], e[8], e[9], e[10], e[11]);
+			if (e[2] == 0x828109F0) { g_SnapObj = e[1]; g_SnapT0 = GetTickCount(); g_SnapStage = 0; }
+			if (e[2] == 0x827F58FC) { g_SnapObj2 = e[1]; g_SnapT2 = GetTickCount(); g_SnapStage2 = 0; }
+			++scrLogged;
+		}
+	}
+	{
+		static DWORD dlgLogged = 0;
+		DWORD dn = g_FH2DlgN;
+		if (dn - dlgLogged > 16) dlgLogged = dn - 16;
+		while (dlgLogged != dn)
+		{
+			DWORD* e = g_FH2DlgRing[dlgLogged & 15];
+			FH2_Log("v1.0.18 DIALOG: tick=%u type=%d id=0x%X a6=%08X a7=%08X a8=%08X lr=%08X chain: %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X",
+				e[0], (int)e[1], e[2], e[3], e[4], e[5], e[6], e[7], e[8], e[9], e[10], e[11], e[12], e[13], e[14], e[15], e[16], e[17], e[18], e[19]);
+			if (e[2] == 0x4E) g_SnapDlg = e[3];
+			// v1.0.45: the rest of the call chain (entries 14..56), 14 per line, for the speed trap 'feature unavailable' investigation
+			for (int b = 20; b < 50; b += 14)
+			{
+				if (!e[b]) break;
+				FH2_Log("v1.0.45 DIALOG id=0x%X tick=%u chain+%d: %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X",
+					e[2], e[0], b - 7, e[b], e[b+1], e[b+2], e[b+3], e[b+4], e[b+5], e[b+6], e[b+7], e[b+8], e[b+9], e[b+10], e[b+11], e[b+12], e[b+13]);
+			}
+			++dlgLogged;
+		}
+	}
+	{
+		// v1.0.31: snapshots 0.4 s / 1.5 s / 6 s / 30 s after the loading screen appears (and 0.3 s after the in-event screen)
+		static const DWORD at[4] = { 400, 1500, 6000, 30000 };
+		DWORD nowS = GetTickCount();
+		if (g_SnapObj && g_SnapStage < 4 && (DWORD)(nowS - g_SnapT0) >= at[g_SnapStage])
+		{
+			CHAR tag[48]; sprintf_s(tag, sizeof(tag), "LOAD+%ums", (unsigned)at[g_SnapStage]);
+			FH2_SnapObj(tag, g_SnapObj, 0x5A0 / 4);
+			if (g_SnapDlg) { sprintf_s(tag, sizeof(tag), "DLG4E+%ums", (unsigned)at[g_SnapStage]); FH2_SnapObj(tag, g_SnapDlg, 48); }
+			++g_SnapStage;
+		}
+		if (g_SnapObj2 && g_SnapStage2 < 1 && (DWORD)(nowS - g_SnapT2) >= 300)
+		{
+			FH2_SnapObj("EVENT+300ms", g_SnapObj2, 0x3B8 / 4);
+			++g_SnapStage2;
+		}
+	}
+	{
+		static DWORD lobbyLogged = 0;
+		DWORD ln = g_FH2LobbyN;
+		while (lobbyLogged != ln)
+		{
+			DWORD* e = g_FH2LobbyRing[lobbyLogged & 31];
+			FH2_Log("v1.0.12 LOBBY STATE: tick=%u obj=%08X %d -> %d caller=%08X up=%08X %08X %08X", e[0], e[1], (int)e[2], (int)e[3], e[4], e[5], e[6], e[7]);
+			++lobbyLogged;
+			if (ln - lobbyLogged > 32) lobbyLogged = ln - 32;
+		}
+	}
+	{
+		static DWORD popupLogged = 0;
+		DWORD pn = g_FH2PopupN;
+		while (popupLogged != pn)
+		{
+			DWORD* e = g_FH2PopupRing[popupLogged & 15];
+			FH2_Log("v1.0.6 POPUP: tick=%u index=%d type=%d caller=%08X", e[0], (int)e[1], (int)e[2], e[3]);
+			++popupLogged;
+			if (pn - popupLogged > 16) popupLogged = pn - 16;
+		}
+	}
+}
+
+// v1.0.33: guest log.  Until g_FH2GuestMs after a title start nothing is logged and none of the log-only hooks are installed, so a joiner's
+// invite-join relaunch runs exactly like a plain 'skipfiles legacy' console.  Then, from the poll thread, logging is switched on and the
+// hooks that 'log' would have installed at the title start are installed now (import-table patches are single-word writes; the five code
+// hooks overwrite the first four instructions of rarely-called functions).
+static VOID FH2_GuestLogStart(DWORD now)
+{
+    extern int g_FH2Stage;
+    extern BOOL g_FH2NoDiag;
+    PLDR_DATA_TABLE_ENTRY mod = (PLDR_DATA_TABLE_ENTRY)*XexExecutableModuleHandle;
+    FH2_GuestNetResync();
+    g_FH2LogEnabled = TRUE;
+    FH2_Log("v1.0.33 GUEST LOG started %u ms after the title start (tick=%u). Everything before this point was not logged.", (unsigned)(now - g_FH2_V095_Epoch), now);
+    FH2_Log("v1.0.40 GAME BUILD: TimeDateStamp=0x%08X (the build the plugin was written for is 0x542E797E)", mod ? (unsigned)mod->TimeDateStamp : 0u);
+    if (g_FH2Stage >= 3 && mod && mod->TimeDateStamp == 0x542E797E) SetupFH2V095TraceHooks();
+    if (g_FH2Stage >= 3) SetupFH2PeerTraceHooks();
+    if (!g_FH2NoDiag) { FH2_InstallPopupHook(); FH2_InstallLobbyHook(); FH2_InstallMsgHook(); FH2_InstallDlgHook(); FH2_InstallScrHook(); }
+    FH2_Log("v1.0.33 GUEST LOG: hooks installed (stage=%d nodiag=%d).", g_FH2Stage, g_FH2NoDiag ? 1 : 0);
+}
+
 static VOID FH2_V095_PollWorker()
 {
     FH2V095Ctx ctx;
@@ -3733,6 +4555,14 @@ static VOID FH2_V095_PollWorker()
         if (title == ForzaHorizon2)
             g_FH2_V095_LastFh2Tick = now;
         FH2_V0920_Heartbeat(now, title);
+        FH2_LogFlush();   // v1.0.19
+
+        // v1.0.33: guest log
+        if (g_FH2GuestLog && g_FH2GuestArmed && title == ForzaHorizon2 && g_FH2_V095_Epoch != 0 && (DWORD)(now - g_FH2_V095_Epoch) >= g_FH2GuestMs)
+        {
+            g_FH2GuestArmed = FALSE;
+            __try { FH2_GuestLogStart(now); } __except (EXCEPTION_EXECUTE_HANDLER) { }
+        }
 
         // Active while FH2 is running and for 25 s after it last was, so the relaunch gap is covered.
         BOOL active = g_FH2LogEnabled && g_FH2_V095_LastFh2Tick != 0 && (now - g_FH2_V095_LastFh2Tick) < 25000;
@@ -3747,6 +4577,7 @@ static VOID FH2_V095_PollWorker()
 
         if (active)
         {
+            __try { FH2_V105_StateSample(now); } __except (EXCEPTION_EXECUTE_HANDLER) { }
             __try { FH2_V095_PollOnce(&ctx, now); }
             __except (EXCEPTION_EXECUTE_HANDLER)
             {
@@ -3757,7 +4588,21 @@ static VOID FH2_V095_PollWorker()
         }
         Sleep(20);
     }
+    FH2_LogFlush();
     g_FH2_V095_PollDone = 1;
+}
+
+// v1.0.2: after writing instructions into the game image, push them out of the data cache and invalidate the instruction cache.
+static VOID FH2_FlushCode(VOID* p, DWORD bytes)
+{
+	BYTE* b = (BYTE*)p;
+	for (DWORD o = 0; o < bytes; o += 4) __dcbst(0, (VOID*)(b + o));
+	__sync();
+	typedef VOID (NTAPI *pFH2_Sweep)(PVOID, DWORD);
+	pFH2_Sweep sweep = (pFH2_Sweep)ResolveFunction("xboxkrnl.exe", 171);   // KeSweepIcacheRange, same as the crashlog hooks
+	if (sweep) sweep((PVOID)b, bytes);
+	__sync();
+	__isync();
 }
 
 // Called every time the FH2 title is detected (first launch and every relaunch).
@@ -3766,8 +4611,11 @@ static VOID FH2_V095_OnTitleDetected()
     DWORD now = GetTickCount();
     g_FH2_V095_LastFh2Tick = now;
     g_FH2_V095_Epoch = now;
+    if (g_FH2GuestLog) { g_FH2LogEnabled = FALSE; g_FH2GuestArmed = TRUE; }   // v1.0.33: every title start begins with logging off
+    { extern BOOL g_FH2LateLog; if (g_FH2LateLog) InterlockedExchange(&g_FH2LogHold, 1); }   // v1.0.28: no file I/O from the first moment of the title start
     InterlockedExchange(&g_FH2_V095_Lines, 0);
     FH2_V095_ResetTraceCounters();
+    FH2_WaitDiagReset();   // v1.0.41
     if (InterlockedCompareExchange(&g_FH2_V095_PollStarted, 1, 0) == 0)
         ThreadMe((LPTHREAD_START_ROUTINE)FH2_V095_PollWorker);
 }
@@ -3791,171 +4639,33 @@ VOID Initialise()
 		{
 			LastTitleId = TitleID; // Set the last title id  to the current title id so we don't loop rechecking
 
-			if (TitleID == Halo3 || TitleID == Halo3ExternalBeta || TitleID == Halo3InternalBeta) // Check for both regular and alpha/beta title ids
-			{
-				RegisterActiveServer(sunrise_ip, sunrise_port, sunrise_description);
-
-				Readini(); // Read the ini each time Halo is loaded to avoid having to reload the plugin
-
-				PLDR_DATA_TABLE_ENTRY PLDR_Halo3xex = (PLDR_DATA_TABLE_ENTRY)*XexExecutableModuleHandle;
-				//XexPcToFileHeader((PVOID)0x82000000, &PLDR_Halo3xex);
-
-				switch (PLDR_Halo3xex->TimeDateStamp) // Detects the exact xex by timestamp. Prevents patching static addresses in the wrong xex.
-				{
-				case 0x48C1FB10: // Halo 3 Retail TU2
-				{
-					Sunrise_Dbg("Halo 3 Retail detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					if (bAllowRetailPlayers)
-						AllowRetailPlayers_HALO3_RETAIL();
-
-					if (bIgnoreTrueskill)
-						SetupXUserReadStatsHook(Halo3_Retail_XUserReadStats_Addr);
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x46CA8883: // Halo 3 Epsilon Aug 20th 2007
-				{
-					Sunrise_Dbg("Halo 3 Epsilon (Aug 20th) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					if (bIgnoreTrueskill)
-						SetupXUserReadStatsHook(Halo3_Epsilon_XUserReadStats_Addr);
-
-					// Enable debug logs.
-					*((DWORD*)(0x82236154)) = 0x60000000;
-
-					// Add Sunrise to the debug logs.
-					RegisterHaloLogger(0x82237920);
-
-					XNotify(L"Halo Sunrise Initialised!");
-					break;
-				}
-				case 0x4637C172: // Halo 3 Beta May 1st 2007
-				{
-					Sunrise_Dbg("Halo 3 Beta (May 1st) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x4649437B: // Halo 3 Beta May 15th 2007
-				{
-					Sunrise_Dbg("Halo 3 Beta (May 15th) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x455E2AC3: // Halo 3 Pimps at sea (Alpha)
-				{
-					Sunrise_Dbg("Halo 3 Pimps at sea (Alpha) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					// Fix a bug where high rank players can't enter matchmaking.
-					*((DWORD*)(0x82457578)) = 0x3960000C;
-					// Fix another stats bug.
-					*((WORD*)(0x82454BAC)) = 0x4800;
-					// Force the game to save settings even if a newer file is present.
-					*((WORD*)(0x82970B30)) = 0x4800;
-
-					// Enable debug logs.
-					*((DWORD*)(0x823b23d0)) = 0x60000000;
-					// Move them from cache:\\ to d:\\ 
-					const char* reports_path = "d:\\reports\\";
-					memcpy(((char*)(0x820B934C)), reports_path, strlen(reports_path) + 1);
-
-					// Add Sunrise to the debug logs.
-					RegisterHaloLogger(0x823B2CE8);
-
-					XNotify(L"Halo Sunrise Initialised!");
-					break;
-				}
-				case 0x45F10275: // Halo 3 Delta cache_test
-				{
-					Sunrise_Dbg("Halo 3 Delta (cache_test, Mar 9th) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x45F1026C: // Halo 3 Delta cache_release
-				{
-					Sunrise_Dbg("Halo 3 Delta (cache_release, Mar 9th) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x45EF61A8: // Halo 3 Delta cache_release
-				{
-					Sunrise_Dbg("Halo 3 Delta (cache_release, Mar 7th) detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				default:
-				{
-					Sunrise_Dbg("Unrecognized Halo 3 xex! TimeDateStamp: 0x%X", PLDR_Halo3xex->TimeDateStamp); // Print the timestamp so we can support this xex later if required.
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-
-				}
-			}
-			else if (TitleID == Halo3ODST)
-			{
-				RegisterActiveServer(sunrise_ip, sunrise_port, sunrise_description);
-
-				Readini(); // Read the ini each time Halo is loaded to avoid having to reload the plugin
-
-				PLDR_DATA_TABLE_ENTRY PLDR_Halo3ODSTxex = (PLDR_DATA_TABLE_ENTRY)*XexExecutableModuleHandle;
-				switch (PLDR_Halo3ODSTxex->TimeDateStamp) // Detects the exact xex by timestamp. Prevents patching static addresses in the wrong xex.
-				{
-				case 0x49F68EC3: // Halo 3 ODST
-				{
-					Sunrise_Dbg("Halo 3 ODST detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				default:
-				{
-					Sunrise_Dbg("Unrecognized Halo 3 ODST xex! TimeDateStamp: 0x%X", PLDR_Halo3ODSTxex->TimeDateStamp); // Print the timestamp so we can support this xex later if required.
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-
-				}
-			}
-			else if (TitleID == ForzaHorizon2)
+			if (TitleID == ForzaHorizon2)
 			{
 				PLDR_DATA_TABLE_ENTRY PLDR_FH2xex = (PLDR_DATA_TABLE_ENTRY)*XexExecutableModuleHandle;
 				Sunrise_Dbg("Forza Horizon 2 detected! TimeDateStamp: 0x%X", PLDR_FH2xex->TimeDateStamp);
 
+				extern int g_FH2Stage;
+				extern BOOL g_FH2SkipFiles, g_FH2SkipPopup, g_FH2SkipAvail, g_FH2NoTimeoutPatch, g_FH2NoDiag;
 				FH2_EarlyLogFlag();
 				FH2_Log("FH2 detected. TitleID=0x%08X TimeDateStamp=0x%08X",
 					TitleID, PLDR_FH2xex->TimeDateStamp);
 
-					FH2_V095_OnTitleDetected();
+					if (g_FH2Stage >= 1) FH2_V095_OnTitleDetected();
 					// v0.9.6: install the v0.9.5 traces FIRST (before the slower patches below) so the game's early startup calls
 					// (notification listeners, sign-in, storage checks) are seen as soon as possible after a relaunch.
-					if (g_FH2LogEnabled && PLDR_FH2xex->TimeDateStamp == 0x542E797E) SetupFH2V095TraceHooks();
+					if (g_FH2Stage >= 3 && g_FH2LogEnabled && PLDR_FH2xex->TimeDateStamp == 0x542E797E) SetupFH2V095TraceHooks();
 
 				// ProjectRoadTrip's modified default.xex differs from the clean retail
 				// image by only 28 bytes: it renames the protected-file table entries
 				// for gamemodes.zip and zipmanifest.xml.  TU09 keeps those table
 				// strings at the same virtual addresses, so reproduce that exact
 				// behavior in memory rather than replacing the user's default.xex.
-				if (PLDR_FH2xex->TimeDateStamp == 0x542E797E)
+				if (g_FH2Stage == 0)
+				{
+					FH2_Log("v1.0.1 stage0: nothing installed (diagnostic).");
+					XNotify(L"FH2Revival v1.0.9 stage 0");
+				}
+				else if (PLDR_FH2xex->TimeDateStamp == 0x542E797E)
 				{
 					CHAR* pGameModes = (CHAR*)0x83662D39;
 					CHAR* pZipManifest = (CHAR*)0x8366D623;
@@ -3968,6 +4678,12 @@ VOID Initialise()
 					BOOL bGameModesOK = FALSE;
 					BOOL bZipManifestOK = FALSE;
 
+					if (g_FH2SkipFiles)
+					{
+						bGameModesOK = TRUE; bZipManifestOK = TRUE;
+						FH2_Log("v1.0.2 skipfiles: protected-file renames NOT applied.");
+					}
+					else {
 					if (memcmp(pGameModes, GameModesOriginal, sizeof(GameModesOriginal)) == 0)
 					{
 						memcpy(pGameModes, GameModesPatched, sizeof(GameModesPatched));
@@ -4000,6 +4716,7 @@ VOID Initialise()
 						FH2_Log("Protected-file table patch FAILED at 0x8366D623 (unexpected bytes).");
 					}
 
+					}
 					if (bGameModesOK && bZipManifestOK)
 					{
 						// TU09 native Turn 10 server-down popup path.
@@ -4017,9 +4734,15 @@ VOID Initialise()
 						const DWORD ServerDownPatched = 0x48000054;
 
 						BOOL bServerPopupPatchOK = FALSE;
-						if (*pServerDownBranch == ServerDownOriginal)
+						if (g_FH2SkipPopup)
+						{
+							bServerPopupPatchOK = TRUE;
+							FH2_Log("v1.0.2 skippopup: server-down branch NOT patched.");
+						}
+						else if (*pServerDownBranch == ServerDownOriginal)
 						{
 							*pServerDownBranch = ServerDownPatched;
+							FH2_FlushCode(pServerDownBranch, 4);
 							bServerPopupPatchOK = TRUE;
 							FH2_Log("Native server-down popup branch patched at 0x82845194: 0x%08X -> 0x%08X.", ServerDownOriginal, ServerDownPatched);
 						}
@@ -4047,10 +4770,16 @@ VOID Initialise()
 							const DWORD ReturnTrue1 = 0x4E800020; // blr
 
 							BOOL bAvailOK = FALSE;
-							if (pAvail[0] == Avail0 && pAvail[1] == Avail1)
+							if (g_FH2SkipAvail)
+							{
+								bAvailOK = TRUE;
+								FH2_Log("v1.0.2 skipavail: availability getter NOT patched.");
+							}
+							else if (pAvail[0] == Avail0 && pAvail[1] == Avail1)
 							{
 								pAvail[0] = ReturnTrue0;
 								pAvail[1] = ReturnTrue1;
+								FH2_FlushCode(pAvail, 8);
 								bAvailOK = TRUE;
 								FH2_Log("v0.8.3 availability bypass installed at 0x823F2870: return TRUE.");
 							}
@@ -4063,11 +4792,107 @@ VOID Initialise()
 							{
 								FH2_Log("v0.8.3 availability bypass FAILED at 0x823F2870. Found %08X %08X.", pAvail[0], pAvail[1]);
 							}
+                            // v1.0.4: the game gives up on an online session operation 40 s after it starts (cmplwi r11,0x9C40 at three
+                            // places: 0x829EDFDC, 0x82A04CAC, 0x82A04D48).  Xbox Live now needs 20-60 s to create sessions, which is
+                            // enough for Road Trip lobbies but not for the free roam invite.  Raise the limit to 65 s.
+                            if (!g_FH2NoTimeoutPatch)
+                            {
+                                static const DWORD tmSites[3] = { 0x829EDFDC, 0x82A04CAC, 0x82A04D48 };
+                                for (int ti = 0; ti < 3; ++ti)
+                                {
+                                    DWORD* pt = (DWORD*)tmSites[ti];
+                                    if (pt[0] == 0x2B0B9C40)
+                                    {
+                                        pt[0] = 0x2B0BFFFF;
+                                        FH2_FlushCode(pt, 4);
+                                        FH2_Log("v1.0.4 session timeout 40s -> 65s patched at 0x%08X.", tmSites[ti]);
+                                    }
+                                    else if (pt[0] == 0x2B0BFFFF)
+                                        FH2_Log("v1.0.4 session timeout already patched at 0x%08X.", tmSites[ti]);
+                                    else
+                                        FH2_Log("v1.0.4 session timeout patch SKIPPED at 0x%08X (found %08X).", tmSites[ti], pt[0]);
+                                }
+                            }
+                            if (g_FH2LogEnabled && !g_FH2NoDiag) { FH2_InstallPopupHook(); FH2_InstallLobbyHook(); FH2_InstallMsgHook(); FH2_InstallDlgHook(); FH2_InstallScrHook(); }
+                            else if (g_FH2LogEnabled) FH2_Log("v1.0.22 nodiag: popup/lobby/message/dialog/screen observation hooks NOT installed.");
+                            // v1.0.9: the session manager also has a 60 s limit on the whole create sequence (timestamp at +0x144, checked at
+                            // 0x82BEF574; blt at 0x82BEF578 skips the timeout).  Free roam needs 21 s + 42 s = 64 s with Live as slow as it is now,
+                            // and the log shows the game aborting exactly 60 s after the first create.  Make the branch unconditional (never time out).
+                            if (!g_FH2NoTimeoutPatch)
+                            {
+                                DWORD* pt = (DWORD*)0x82BEF578;
+                                if (pt[0] == 0x41980018)
+                                {
+                                    pt[0] = 0x48000018;
+                                    FH2_FlushCode(pt, 4);
+                                    FH2_Log("v1.0.9 session sequence 60 s limit removed at 0x82BEF578.");
+                                }
+                                else if (pt[0] == 0x48000018)
+                                    FH2_Log("v1.0.9 session sequence limit already removed at 0x82BEF578.");
+                                else
+                                    FH2_Log("v1.0.9 session sequence limit patch SKIPPED at 0x82BEF578 (found %08X).", pt[0]);
+                            }
+                            // v1.0.19: the error in the free roam invite appears about 30 s after the 0x2D create is sent (v1.0.18 run: create
+                            // sent 01:17:27, OK pressed 01:18:29 about 30 s after the error), while Live needs 41 s for that create.  The game
+                            // keeps a list of pending entries (+0x14 = start time, +0xA = long-operation flag) and gives up on one at start +
+                            // 30000 ms (start + 10000 ms when the flag is clear), then reports an error.  Six places compute that deadline:
+                            // addi rX,rY,0x7530 (4 x 0x396B7530, 1 x 0x3BAB7530) and li r3,0x7530.  Replace each by addis/lis 1 = +65536 ms.
+                            if (!g_FH2NoTimeoutPatch)
+                            {
+                                static const struct { DWORD addr; DWORD from; DWORD to; } t30[6] = {
+                                    { 0x829F80DC, 0x396B7530, 0x3D6B0001 },   // addis r11,r11,1
+                                    { 0x829F9D18, 0x396B7530, 0x3D6B0001 },
+                                    { 0x829F9E08, 0x396B7530, 0x3D6B0001 },
+                                    { 0x82A075E8, 0x396B7530, 0x3D6B0001 },
+                                    { 0x82A07A00, 0x3BAB7530, 0x3FAB0001 },   // addis r29,r11,1
+                                    { 0x829F9D50, 0x38607530, 0x3C600001 },   // lis r3,1
+                                };
+                                for (int ti = 0; ti < 6; ++ti)
+                                {
+                                    DWORD* pt = (DWORD*)t30[ti].addr;
+                                    if (pt[0] == t30[ti].from)
+                                    {
+                                        pt[0] = t30[ti].to;
+                                        FH2_FlushCode(pt, 4);
+                                        FH2_Log("v1.0.19 pending-entry timeout 30 s -> 65 s patched at 0x%08X.", t30[ti].addr);
+                                    }
+                                    else if (pt[0] == t30[ti].to)
+                                        FH2_Log("v1.0.19 pending-entry timeout already patched at 0x%08X.", t30[ti].addr);
+                                    else
+                                        FH2_Log("v1.0.19 pending-entry timeout patch SKIPPED at 0x%08X (found %08X).", t30[ti].addr, pt[0]);
+                                }
+                            }
+                            // v1.0.21: FOUND.  The "Creating session" dialog is a screen object whose per-frame update (0x8283BBF8) compares the time since it
+                            // was shown (tick stored at +0x190) with a hard-coded 40000.0 ms (float at 0x82011268, read only by the check 0x82790650).  Past that
+                            // it switches itself to the error state (+0x18C = 3) and builds the NO NETWORK ACCESS content.  v1.0.20 log: dialog created at tick
+                            // 108949, error content built at tick 149014 = 40.07 s later, i.e. 2 s BEFORE Live finishes the 0x2D create (42 s).  The constant is
+                            // shared with other code, so change the check instead: use the 100000.0 float at 0x82000B94 (lis r11,-0x7e00 / lfs f0,0xB94(r11)).
+                            if (!g_FH2NoTimeoutPatch)
+                            {
+                                DWORD* pt = (DWORD*)0x82790650;
+                                if (pt[0] == 0x3D608201 && pt[1] == 0x38600000 && pt[2] == 0xC00B1268)
+                                {
+                                    pt[0] = 0x3D608200;
+                                    pt[2] = 0xC00B0B94;
+                                    FH2_FlushCode(pt, 12);
+                                    FH2_Log("v1.0.21 Creating-session dialog timeout 40 s -> 100 s patched at 0x82790650 (limit float now %f).", *(volatile float*)0x82000B94);
+                                }
+                                else if (pt[0] == 0x3D608200 && pt[2] == 0xC00B0B94)
+                                    FH2_Log("v1.0.21 dialog timeout already patched at 0x82790650.");
+                                else
+                                    FH2_Log("v1.0.21 dialog timeout patch SKIPPED at 0x82790650 (found %08X %08X %08X).", pt[0], pt[1], pt[2]);
+                            }
+                            // v1.0.47: Festival tile picture (default on; FH2Synth.txt word nofestpic switches it off).
+                            {
+                                extern BOOL g_FH2NoFestPic;
+                                if (!g_FH2NoFestPic) FH2_FestPicPatch();
+                            }
                             BOOL bProvenanceOK = FALSE;
                             BOOL bRoadTripTapOK = FALSE;
-                            if (bAvailOK)
-                            {
+                            if (bAvailOK && g_FH2Stage >= 2)
                                 bProvenanceOK = SetupFH2ProvenanceTraceHooks();
+                            if (bAvailOK && g_FH2Stage >= 3)
+                            {
                                 BOOL bProbeOK = SetupFH2XamProbeHooks();
                                 FH2_Log("v0.8.4 XAM probe installed=%d", bProbeOK);
                                 if (g_FH2LogEnabled) SetupFH2PeerTraceHooks();
@@ -4076,7 +4901,9 @@ VOID Initialise()
 
                             FH2_Log("v0.8.3 NETWORK PROVENANCE installed: avail=%d provenance=%d tap=%d.",
                                 bAvailOK, bProvenanceOK, bRoadTripTapOK);
-                            XNotify(L"FH2Revival v1.0.0!");
+                            if (g_FH2Stage >= 3) XNotify(L"FH2Revival v1.0.48!");
+                            else if (g_FH2Stage == 2) XNotify(L"FH2Revival v1.0.9 stage 2");
+                            else XNotify(L"FH2Revival v1.0.9 stage 1");
 						}
 
 						else
@@ -4095,60 +4922,6 @@ VOID Initialise()
 				{
 					FH2_Log("Unsupported FH2 XEX timestamp for v0.2 patch: 0x%08X", PLDR_FH2xex->TimeDateStamp);
 					XNotify(L"FH2Revival Unsupported XEX!");
-				}
-			}
-			else if (TitleID == HaloReach) // Future Reach support
-			{
-				RegisterActiveServer(sunrise_ip, sunrise_port, sunrise_description);
-
-				Readini(); // Read the ini each time Halo is loaded to avoid having to reload the plugin
-
-				PLDR_DATA_TABLE_ENTRY PLDR_HaloReachxex = (PLDR_DATA_TABLE_ENTRY)*XexExecutableModuleHandle;
-				switch (PLDR_HaloReachxex->TimeDateStamp)
-				{
-				case 0x4C4AAE66:
-				{
-					Sunrise_Dbg("Halo: Reach detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x4E559FF8: //reach tu
-				{
-					Sunrise_Dbg("Halo: Reach TU detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					if (bAllowRetailPlayers) {
-						AllowRetailPlayers_HALOREACH_RETAIL();
-					}
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				case 0x4CC5E691:
-				{
-					Sunrise_Dbg("Halo: Reach detected! Initialising hooks...");
-					SetupNetDllHooks();
-
-					// Load retail maps.
-					*((DWORD*)(0x823C0244)) = 0x60000000;
-					*((DWORD*)(0x823C01E4)) = 0x60000000;
-					// Havok Patch
-					*((DWORD*)(0x8305C000)) = 0x60000000;
-					*((DWORD*)(0x8305C010)) = 0x60000000;
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
-				default:
-				{
-					Sunrise_Dbg("Unrecognized Halo Reach xex! TimeDateStamp: 0x%X", PLDR_HaloReachxex->TimeDateStamp); // Print the timestamp so we can support this xex later if required.
-					SetupNetDllHooks();
-
-					XNotify(L"Halo Sunrise Intialised!");
-					break;
-				}
 				}
 			}
 		}

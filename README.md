@@ -8,7 +8,7 @@ The project consists of an Xbox 360 DashLaunch plugin and a custom replacement f
 
 ## Current Status
 
-FH2Revival v1.0.0 currently supports:
+FH2Revival v1.0.48 currently supports:
 
 - Online Road Trip
 - Native playlist matchmaking
@@ -17,8 +17,10 @@ FH2Revival v1.0.0 currently supports:
 - Pro Series
 - Pure Skill
 - Playground
-
-The original Turn 10 title servers are no longer required.
+- Free Roam
+- Clubs
+- Speed trap leaderboards
+- Players on unmodded consoles can join a lobby hosted by someone running the plugin
 
 ## Requirements
 
@@ -40,8 +42,8 @@ The original Turn 10 title servers are no longer required.
 
 ## Known Limitations
 
-- Strict network configurations may have difficulty establishing peer-to-peer connections.
-- Clubs and Rivals are not currently supported but support is planned for a future release.
+- Players on unmodded consoles see a "Server not available" message about XP after each Online Road Trip event. XP and levelling still work locally.
+- Rivals is not currently supported but support is planned for a future release.
 
 ## Credits
 
